@@ -23,7 +23,14 @@ export interface Transaction {
   type: TransactionType
   areaId: AreaId
   specialtyId?: SpecialtyId
+  /** Importe base usado en balances (siempre el neto) */
   amount: number
+  /** Base imponible (neto) */
+  netAmount?: number
+  /** IVA: 15% en ingresos, 21% en gastos */
+  vatAmount?: number
+  /** Neto + IVA */
+  grossAmount?: number
   date: string
   description: string
   invoiceFileName?: string

@@ -11,6 +11,7 @@ import {
   SEED_PRODUCT_SALES,
   SEED_TRANSACTIONS,
 } from '../data/seed'
+import { vatFromNet } from '../lib/vat'
 import type {
   AestheticProduct,
   AreaId,
@@ -25,9 +26,33 @@ export interface NewTransactionInput {
   areaId: AreaId
   specialtyId?: SpecialtyId
   amount: number
+  netAmount?: number
+  vatAmount?: number
+  grossAmount?: number
   date: string
   description: string
   invoiceFileName?: string
+}
+
+function withVatFields(input: NewTransactionInput): NewTransactionInput {
+  const breakdown = vatFromNet(input.netAmount ?? input.amount, input.type)
+  return {
+    ...input,
+    amount: breakdown.netAmount,
+    ...breakdown,
+  }
+}
+
+function normalizeTransaction(tx: Transaction): Transaction {
+  if (
+    tx.netAmount != null &&
+    tx.vatAmount != null &&
+    tx.grossAmount != null
+  ) {
+    return { ...tx, amount: tx.netAmount }
+  }
+  const breakdown = vatFromNet(tx.netAmount ?? tx.amount, tx.type)
+  return { ...tx, amount: breakdown.netAmount, ...breakdown }
 }
 
 export interface NewProductInput {
@@ -64,20 +89,21 @@ interface FinanceContextValue {
 
 const FinanceContext = createContext<FinanceContextValue | null>(null)
 
-const TX_KEY = 'cb-operaciones-transactions-v4'
-const INV_KEY = 'cb-operaciones-inventory-v2'
+const TX_KEY = 'cb-operaciones-transactions-v9'
+const INV_KEY = 'cb-operaciones-inventory-v4'
 
 function loadTransactions(): Transaction[] {
   try {
     const raw = localStorage.getItem(TX_KEY)
     if (raw) {
       const parsed = JSON.parse(raw) as Transaction[]
-      if (Array.isArray(parsed)) return parsed
+      if (Array.isArray(parsed)) return parsed.map(normalizeTransaction)
     }
   } catch {
     /* ignore */
   }
-  return SEED_TRANSACTIONS
+  // Solo Quirón; sin clínica ni cataratas de demo.
+  return SEED_TRANSACTIONS.map(normalizeTransaction)
 }
 
 function loadInventory(): { products: AestheticProduct[]; sales: ProductSale[] } {
@@ -132,7 +158,7 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
     (input: NewTransactionInput) => {
       const tx: Transaction = {
         id: uid('tx'),
-        ...input,
+        ...withVatFields(input),
         createdAt: new Date().toISOString(),
       }
       persistTx([tx, ...transactions])
@@ -142,8 +168,9 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
 
   const updateTransaction = useCallback(
     (id: string, input: NewTransactionInput) => {
+      const next = withVatFields(input)
       persistTx(
-        transactions.map((t) => (t.id === id ? { ...t, ...input } : t)),
+        transactions.map((t) => (t.id === id ? { ...t, ...next } : t)),
       )
     },
     [persistTx, transactions],
@@ -224,12 +251,15 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
       if (register) {
         incomeTransactionId = uid('tx')
         expenseTransactionId = uid('tx')
+        const incomeBreakdown = vatFromNet(revenue, 'ingreso')
+        const expenseBreakdown = vatFromNet(cogs, 'gasto')
         const income: Transaction = {
           id: incomeTransactionId,
           type: 'ingreso',
           areaId: product.areaId,
           specialtyId: 'estetica',
-          amount: revenue,
+          amount: incomeBreakdown.netAmount,
+          ...incomeBreakdown,
           date: input.date,
           description: `Venta producto: ${product.name} × ${input.quantity}`,
           createdAt: now,
@@ -239,7 +269,8 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
           type: 'gasto',
           areaId: product.areaId,
           specialtyId: 'estetica',
-          amount: cogs,
+          amount: expenseBreakdown.netAmount,
+          ...expenseBreakdown,
           date: input.date,
           description: `Coste producto: ${product.name} × ${input.quantity}`,
           createdAt: now,

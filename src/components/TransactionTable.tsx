@@ -118,8 +118,27 @@ export function TransactionTable({
                     t.type === 'ingreso' ? 'text-olive' : 'text-rose'
                   }`}
                 >
-                  {t.type === 'gasto' ? '−' : '+'}
-                  {formatCurrencyPrecise(t.amount)}
+                  {t.grossAmount != null ? (
+                    <div className="flex flex-col items-end gap-0.5">
+                      <span>
+                        {t.type === 'gasto' ? '−' : '+'}
+                        {formatCurrencyPrecise(t.grossAmount)}
+                        <span className="ml-1 text-[10px] font-normal uppercase tracking-[0.08em] text-ink-muted">
+                          bruto
+                        </span>
+                      </span>
+                      <span className="text-[11px] font-normal text-ink-muted">
+                        Neto {formatCurrencyPrecise(t.netAmount ?? t.amount)}
+                        {' · '}
+                        IVA {formatCurrencyPrecise(t.vatAmount ?? 0)}
+                      </span>
+                    </div>
+                  ) : (
+                    <>
+                      {t.type === 'gasto' ? '−' : '+'}
+                      {formatCurrencyPrecise(t.amount)}
+                    </>
+                  )}
                 </td>
                 {editable && (
                   <td className="px-4 py-3.5">

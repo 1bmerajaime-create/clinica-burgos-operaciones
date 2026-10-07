@@ -1,7 +1,9 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { AREAS, SPECIALTIES, areaNeedsSpecialty } from '../data/areas'
 import { useFinance } from '../context/FinanceContext'
 import { extractInvoiceFields } from '../lib/invoiceOcr'
+import { formatCurrencyPrecise } from '../lib/format'
+import { vatFromNet, vatRateFor } from '../lib/vat'
 import type {
   AreaId,
   SpecialtyId,
@@ -46,6 +48,14 @@ export function TransactionFormModal({
 
   const needsSpecialty = areaNeedsSpecialty(areaId)
 
+  const vatBreakdown = useMemo(() => {
+    const value = Number(amount.replace(',', '.'))
+    if (!value || value <= 0) return null
+    return vatFromNet(value, type)
+  }, [type, amount])
+
+  const vatPercent = (vatRateFor(type) * 100).toFixed(0)
+
   useEffect(() => {
     if (!open) return
 
@@ -53,7 +63,7 @@ export function TransactionFormModal({
       setType(transaction.type)
       setAreaId(transaction.areaId)
       setSpecialtyId(transaction.specialtyId ?? '')
-      setAmount(String(transaction.amount))
+      setAmount(String(transaction.netAmount ?? transaction.amount))
       setDate(transaction.date)
       setDescription(transaction.description)
       setFileName(transaction.invoiceFileName ?? '')
@@ -157,11 +167,16 @@ export function TransactionFormModal({
     if (!value || value <= 0 || !description.trim()) return
     if (needsSpecialty && !specialtyId) return
 
+    const vat = vatFromNet(value, type)
+
     const payload = {
       type,
       areaId,
       specialtyId: needsSpecialty ? (specialtyId as SpecialtyId) : undefined,
-      amount: value,
+      amount: vat.netAmount,
+      netAmount: vat.netAmount,
+      vatAmount: vat.vatAmount,
+      grossAmount: vat.grossAmount,
       date,
       description: description.trim(),
       invoiceFileName: fileName || transaction?.invoiceFileName || undefined,
@@ -213,8 +228,8 @@ export function TransactionFormModal({
                 {fileName || 'Adjuntar factura (JPG / PNG / PDF)'}
               </span>
               <span className="mt-1.5 text-xs text-ink-muted">
-                Si subes un documento, intentamos rellenar importe, fecha y
-                concepto
+                Si subes un documento, intentamos rellenar importe neto, fecha
+                y concepto
               </span>
               <input
                 id="invoice-file"
@@ -288,7 +303,7 @@ export function TransactionFormModal({
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
-              <Label htmlFor="amount">Importe (€)</Label>
+              <Label htmlFor="amount">Importe neto (€)</Label>
               <Input
                 id="amount"
                 type="number"
@@ -310,6 +325,38 @@ export function TransactionFormModal({
                 required
               />
             </div>
+          </div>
+
+          <div className="rounded-2xl border border-sand/80 bg-cream-dark/50 px-4 py-3">
+            <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-ink-muted">
+              Desglose IVA {vatPercent}%
+            </p>
+            <dl className="mt-2 space-y-1.5 text-sm">
+              <div className="flex items-center justify-between gap-4">
+                <dt className="text-ink-soft">Neto</dt>
+                <dd className="tabular-nums text-ink">
+                  {vatBreakdown
+                    ? formatCurrencyPrecise(vatBreakdown.netAmount)
+                    : '—'}
+                </dd>
+              </div>
+              <div className="flex items-center justify-between gap-4">
+                <dt className="text-ink-soft">IVA {vatPercent}%</dt>
+                <dd className="tabular-nums text-ink">
+                  {vatBreakdown
+                    ? formatCurrencyPrecise(vatBreakdown.vatAmount)
+                    : '—'}
+                </dd>
+              </div>
+              <div className="flex items-center justify-between gap-4 border-t border-sand/70 pt-1.5">
+                <dt className="font-medium text-ink">Total bruto</dt>
+                <dd className="font-medium tabular-nums text-ink">
+                  {vatBreakdown
+                    ? formatCurrencyPrecise(vatBreakdown.grossAmount)
+                    : '—'}
+                </dd>
+              </div>
+            </dl>
           </div>
 
           <div>
