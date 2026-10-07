@@ -1,4 +1,11 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
-  <rect width="64" height="64" rx="12" fill="#2D2926"/>
-  <text x="32" y="42" text-anchor="middle" font-family="Georgia, serif" font-size="32" fill="#F9F7F2" font-weight="400">B</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <circle cx="32" cy="32" r="32" fill="#ffffff"/>
+  <image
+    href="/simbolo-clinica-burgos.png"
+    x="14"
+    y="8"
+    width="36"
+    height="48"
+    preserveAspectRatio="xMidYMid meet"
+  />
 </svg>

@@ -20,7 +20,7 @@ export function Layout() {
             <img
               src="/logo-clinica-burgos.png"
               alt="Clínica Burgos"
-              className="h-7 w-auto transition duration-200 group-hover:opacity-80 md:h-8"
+              className="h-5 w-auto transition duration-200 group-hover:opacity-80 md:h-6"
             />
           </NavLink>
 
