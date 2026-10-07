@@ -1,16 +1,12 @@
-import { NavLink, Outlet, useLocation } from 'react-router-dom'
-import { FileUp, Plus, Wallet } from 'lucide-react'
+import { NavLink, Outlet } from 'react-router-dom'
+import { Plus, Wallet } from 'lucide-react'
 import { useState } from 'react'
 import { Button } from './ui'
 import { TransactionFormModal } from './TransactionFormModal'
-import { InvoiceUploadModal } from './InvoiceUploadModal'
 
 export function Layout() {
-  const location = useLocation()
-  const isHome = location.pathname === '/'
   const [incomeOpen, setIncomeOpen] = useState(false)
   const [expenseOpen, setExpenseOpen] = useState(false)
-  const [invoiceOpen, setInvoiceOpen] = useState(false)
 
   return (
     <div className="min-h-screen">
@@ -24,30 +20,20 @@ export function Layout() {
             />
           </NavLink>
 
-          {isHome && (
-            <div className="flex items-center gap-2">
-              <Button
-                variant="secondary"
-                className="hidden !px-4 sm:inline-flex"
-                onClick={() => setInvoiceOpen(true)}
-              >
-                <FileUp size={14} />
-                Factura
-              </Button>
-              <Button
-                variant="secondary"
-                className="!px-4"
-                onClick={() => setExpenseOpen(true)}
-              >
-                <Wallet size={14} />
-                Gasto
-              </Button>
-              <Button className="!px-4" onClick={() => setIncomeOpen(true)}>
-                <Plus size={14} />
-                Ingreso
-              </Button>
-            </div>
-          )}
+          <div className="flex items-center gap-2">
+            <Button
+              variant="secondary"
+              className="!px-4"
+              onClick={() => setExpenseOpen(true)}
+            >
+              <Wallet size={14} />
+              Gasto
+            </Button>
+            <Button className="!px-4" onClick={() => setIncomeOpen(true)}>
+              <Plus size={14} />
+              Ingreso
+            </Button>
+          </div>
         </div>
       </header>
 
@@ -71,7 +57,6 @@ export function Layout() {
         onClose={() => setExpenseOpen(false)}
         type="gasto"
       />
-      <InvoiceUploadModal open={invoiceOpen} onClose={() => setInvoiceOpen(false)} />
     </div>
   )
 }

@@ -16,7 +16,7 @@ import {
   buildChartMonthSeries,
   type ChartGranularity,
 } from '../lib/analytics'
-import { formatCurrency } from '../lib/format'
+import { formatCurrencyPrecise } from '../lib/format'
 import type { AreaId, SpecialtyId, Transaction } from '../types'
 import { Card, Label, Select } from './ui'
 
@@ -166,13 +166,20 @@ export function FinanceChart({
       <YAxis
         tickFormatter={(v) => {
           const n = Number(v)
-          if (Math.abs(n) >= 1000) return `${Math.round(n / 1000)}k`
-          return String(Math.round(n))
+          if (Math.abs(n) >= 10_000) {
+            return `${(n / 1000).toLocaleString('es-ES', {
+              maximumFractionDigits: 1,
+            })}k`
+          }
+          return n.toLocaleString('es-ES', {
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 2,
+          })
         }}
         tick={{ fill: '#8A847C', fontSize: 11 }}
         axisLine={false}
         tickLine={false}
-        width={40}
+        width={52}
       />
       <Tooltip
         labelFormatter={(label) =>
@@ -184,7 +191,7 @@ export function FinanceChart({
           const label = n === 'ingresos' ? 'Ingresos' : 'Gastos'
           return [
             <span key={n} style={{ color, fontWeight: 600 }}>
-              {formatCurrency(Number(value))}
+              {formatCurrencyPrecise(Number(value))}
             </span>,
             label,
           ]

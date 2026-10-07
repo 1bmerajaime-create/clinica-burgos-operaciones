@@ -1,8 +1,7 @@
-import { ArrowLeft, ArrowUpRight, FileUp, Plus, Wallet } from 'lucide-react'
+import { ArrowLeft, ArrowUpRight, Plus, Wallet } from 'lucide-react'
 import { useMemo, useState, type ReactNode } from 'react'
 import { Link, Navigate, useParams } from 'react-router-dom'
 import { FinanceChart } from '../components/FinanceChart'
-import { InvoiceUploadModal } from '../components/InvoiceUploadModal'
 import { ProductsSection } from '../components/ProductsSection'
 import { SignedAmount } from '../components/SignedAmount'
 import { TransactionFormModal } from '../components/TransactionFormModal'
@@ -71,7 +70,6 @@ export function SpecialtyDetail() {
 
   const [incomeOpen, setIncomeOpen] = useState(false)
   const [expenseOpen, setExpenseOpen] = useState(false)
-  const [invoiceOpen, setInvoiceOpen] = useState(false)
   const [listType, setListType] = useState<TransactionType | null>(null)
 
   const id = (area?.id ?? 'clinica') as AreaId
@@ -121,10 +119,6 @@ export function SpecialtyDetail() {
         </div>
 
         <div className="flex flex-wrap gap-2">
-          <Button variant="secondary" onClick={() => setInvoiceOpen(true)}>
-            <FileUp size={14} />
-            Factura
-          </Button>
           <Button variant="secondary" onClick={() => setExpenseOpen(true)}>
             <Wallet size={14} />
             Gasto
@@ -216,12 +210,6 @@ export function SpecialtyDetail() {
         open={expenseOpen}
         onClose={() => setExpenseOpen(false)}
         type="gasto"
-        defaultAreaId={id}
-        defaultSpecialtyId={specId}
-      />
-      <InvoiceUploadModal
-        open={invoiceOpen}
-        onClose={() => setInvoiceOpen(false)}
         defaultAreaId={id}
         defaultSpecialtyId={specId}
       />
