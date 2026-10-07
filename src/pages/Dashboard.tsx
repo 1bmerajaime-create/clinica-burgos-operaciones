@@ -206,7 +206,7 @@ export function Dashboard() {
           </div>
         </div>
 
-        <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        <dl className="grid grid-cols-1 gap-3 min-[400px]:grid-cols-2 lg:grid-cols-5">
           {vatDetailRows.map((row) => (
             <div
               key={row.label}
@@ -216,7 +216,7 @@ export function Dashboard() {
                 {row.label}
               </dt>
               <dd
-                className={`mt-1.5 font-display text-lg font-medium tabular-nums tracking-tight sm:text-xl ${row.tone}`}
+                className={`mt-1.5 break-words font-display text-base font-medium tabular-nums tracking-tight sm:text-lg md:text-xl ${row.tone}`}
               >
                 {formatCurrencyPrecise(row.value)}
               </dd>

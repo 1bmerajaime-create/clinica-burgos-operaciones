@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import type {
   ButtonHTMLAttributes,
@@ -191,6 +192,72 @@ export function Modal({
           </button>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
+      </div>
+    </div>,
+    document.body,
+  )
+}
+
+/** Panel inferior para filtros y acciones en móvil. */
+export function BottomSheet({
+  open,
+  onClose,
+  title,
+  children,
+  footer,
+}: {
+  open: boolean
+  onClose: () => void
+  title: string
+  children: ReactNode
+  footer?: ReactNode
+}) {
+  useEffect(() => {
+    if (!open) return
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = prev
+    }
+  }, [open])
+
+  if (!open || typeof document === 'undefined') return null
+
+  return createPortal(
+    <div className="fixed inset-0 z-[85] flex items-end justify-center sm:items-center sm:p-4">
+      <button
+        type="button"
+        className="absolute inset-0 bg-ink/40 backdrop-blur-[2px] animate-fade-in"
+        aria-label="Cerrar"
+        onClick={onClose}
+      />
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        className="relative z-10 flex max-h-[88vh] w-full max-w-lg animate-sheet-up flex-col rounded-t-[1.5rem] border border-sand bg-cream shadow-2xl sm:max-h-[85vh] sm:rounded-[1.5rem]"
+      >
+        <div className="flex shrink-0 flex-col items-center px-5 pt-3 pb-2 sm:hidden">
+          <span className="mb-3 h-1 w-10 rounded-full bg-ink/15" aria-hidden />
+        </div>
+        <div className="flex shrink-0 items-start justify-between gap-3 border-b border-sand/70 px-5 pb-3 sm:px-6 sm:pt-5">
+          <h3 className="font-display text-xl font-medium text-ink">{title}</h3>
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-ink/15 text-ink-soft transition hover:border-ink/40 hover:text-ink"
+          >
+            ✕
+          </button>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-4 sm:px-6">
+          {children}
+        </div>
+        {footer && (
+          <div className="shrink-0 border-t border-sand/70 px-5 py-4 sm:px-6">
+            {footer}
+          </div>
+        )}
       </div>
     </div>,
     document.body,

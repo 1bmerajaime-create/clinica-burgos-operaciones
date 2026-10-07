@@ -134,11 +134,7 @@ export function TransactionFormModal({
     setScanNote('')
   }, [open, transaction, typeProp, defaultAreaId, defaultSpecialtyId])
 
-  const title = isEditing
-    ? 'Editar movimiento'
-    : type === 'ingreso'
-      ? 'Introducir ingreso'
-      : 'Introducir gasto'
+  const title = isEditing ? 'Editar movimiento' : 'Nuevo movimiento'
 
   function handleClose() {
     setSaved(false)
@@ -272,21 +268,19 @@ export function TransactionFormModal({
         </div>
       ) : (
         <form onSubmit={handleSubmit} className="space-y-4">
-          {isEditing && (
-            <div>
-              <Label htmlFor="type">Tipo</Label>
-              <Select
-                id="type"
-                value={type}
-                onChange={(e) =>
-                  handleTypeChange(e.target.value as TransactionType)
-                }
-              >
-                <option value="ingreso">Ingreso</option>
-                <option value="gasto">Gasto</option>
-              </Select>
-            </div>
-          )}
+          <div>
+            <Label htmlFor="type">Tipo</Label>
+            <Select
+              id="type"
+              value={type}
+              onChange={(e) =>
+                handleTypeChange(e.target.value as TransactionType)
+              }
+            >
+              <option value="ingreso">Ingreso</option>
+              <option value="gasto">Gasto</option>
+            </Select>
+          </div>
 
           <div>
             <Label htmlFor="invoice-file">Factura (opcional)</Label>
@@ -520,11 +514,7 @@ export function TransactionFormModal({
               Cancelar
             </Button>
             <Button type="submit" disabled={scanning}>
-              {isEditing
-                ? 'Guardar cambios'
-                : type === 'ingreso'
-                  ? 'Guardar ingreso'
-                  : 'Guardar gasto'}
+              {isEditing ? 'Guardar cambios' : 'Guardar movimiento'}
             </Button>
           </div>
         </form>

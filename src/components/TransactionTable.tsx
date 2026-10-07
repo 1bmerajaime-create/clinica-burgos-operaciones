@@ -18,6 +18,48 @@ interface Props {
   bare?: boolean
 }
 
+function AmountBlock({ t }: { t: Transaction }) {
+  return (
+    <div
+      className={`flex flex-col gap-0.5 font-medium tabular-nums ${
+        t.type === 'ingreso' ? 'text-olive' : 'text-rose'
+      }`}
+    >
+      <span>
+        {t.type === 'gasto' ? '−' : '+'}
+        {formatCurrencyPrecise(t.netAmount ?? t.amount)}
+        <span className="ml-1 text-[10px] font-normal uppercase tracking-[0.08em] text-ink-muted">
+          base
+        </span>
+      </span>
+      <span className="text-[11px] font-normal text-ink-muted">
+        {t.vatExempt || t.vatRate === 0
+          ? 'Exento'
+          : `IVA ${formatCurrencyPrecise(t.vatAmount ?? 0)}`}
+        {t.grossAmount != null &&
+          ` · Total ${formatCurrencyPrecise(t.grossAmount)}`}
+        {t.type === 'gasto' &&
+          t.vatAmount != null &&
+          t.vatAmount > 0 &&
+          t.vatDeductible === false &&
+          ' · No deducible'}
+      </span>
+    </div>
+  )
+}
+
+function TypeBadge({ type }: { type: Transaction['type'] }) {
+  return (
+    <span
+      className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.12em] ${
+        type === 'ingreso' ? 'bg-olive/15 text-olive' : 'bg-rose/15 text-rose'
+      }`}
+    >
+      {type}
+    </span>
+  )
+}
+
 export function TransactionTable({
   transactions,
   title = 'Movimientos recientes',
@@ -39,8 +81,75 @@ export function TransactionTable({
     if (ok) removeTransaction(t.id)
   }
 
-  const table = (
-    <div className="overflow-x-auto">
+  function rowMeta(t: Transaction) {
+    const area = getArea(t.areaId)
+    return t.specialtyId
+      ? `${area?.shortName} · ${specialtyLabel(t.specialtyId)}`
+      : area?.shortName
+  }
+
+  const empty = (
+    <p className="px-4 py-10 text-center text-sm text-ink-muted sm:px-6">
+      No hay movimientos todavía.
+    </p>
+  )
+
+  const mobileList = (
+    <div className="divide-y divide-sand/50 md:hidden">
+      {transactions.length === 0 && empty}
+      {transactions.map((t) => (
+        <div key={t.id} className="px-4 py-4">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <TypeBadge type={t.type} />
+                <span className="text-xs text-ink-muted">
+                  {formatDate(t.date)}
+                </span>
+                {t.invoiceFileName && (
+                  <span title={t.invoiceFileName} className="text-brass">
+                    <Paperclip size={14} />
+                  </span>
+                )}
+              </div>
+              <p className="mt-1.5 text-sm text-ink">{t.description}</p>
+              {showArea && (
+                <p className="mt-0.5 text-[11px] text-ink-muted">{rowMeta(t)}</p>
+              )}
+            </div>
+            <div className="shrink-0 text-right">
+              <AmountBlock t={t} />
+            </div>
+          </div>
+          {editable && (
+            <div className="mt-3 flex justify-end gap-1">
+              <button
+                type="button"
+                onClick={() => setEditing(t)}
+                className="flex h-8 w-8 items-center justify-center rounded-full border border-ink/10 text-ink-soft transition hover:border-ink/30 hover:bg-cream hover:text-ink"
+                title="Editar"
+                aria-label="Editar movimiento"
+              >
+                <Pencil size={14} />
+              </button>
+              <button
+                type="button"
+                onClick={() => handleDelete(t)}
+                className="flex h-8 w-8 items-center justify-center rounded-full border border-ink/10 text-ink-soft transition hover:border-rose/40 hover:bg-rose/10 hover:text-rose"
+                title="Eliminar"
+                aria-label="Eliminar movimiento"
+              >
+                <Trash2 size={14} />
+              </button>
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  )
+
+  const desktopTable = (
+    <div className="hidden overflow-x-auto md:block">
       <table className="w-full min-w-[640px] text-left">
         <thead>
           <tr className="border-y border-sand/70 text-[10px] uppercase tracking-[0.16em] text-ink-muted">
@@ -65,123 +174,95 @@ export function TransactionTable({
               </td>
             </tr>
           )}
-          {transactions.map((t) => {
-            const area = getArea(t.areaId)
-            const detail = t.specialtyId
-              ? `${area?.shortName} · ${specialtyLabel(t.specialtyId)}`
-              : area?.shortName
-
-            return (
-              <tr
-                key={t.id}
-                className="border-b border-sand/40 transition hover:bg-cream-dark/40"
-              >
-                <td className="px-4 py-3.5 text-sm text-ink-soft sm:px-6">
-                  {formatDate(t.date)}
-                </td>
-                <td className="px-4 py-3.5">
-                  <div className="flex items-start gap-2">
-                    <div>
-                      <p className="text-sm text-ink">{t.description}</p>
-                      {t.specialtyId && (
-                        <p className="mt-0.5 text-[11px] text-ink-muted">
-                          {specialtyLabel(t.specialtyId)}
-                        </p>
-                      )}
-                    </div>
-                    {t.invoiceFileName && (
-                      <span
-                        title={t.invoiceFileName}
-                        className="mt-0.5 text-brass"
-                      >
-                        <Paperclip size={14} />
-                      </span>
+          {transactions.map((t) => (
+            <tr
+              key={t.id}
+              className="border-b border-sand/40 transition hover:bg-cream-dark/40"
+            >
+              <td className="px-4 py-3.5 text-sm text-ink-soft sm:px-6">
+                {formatDate(t.date)}
+              </td>
+              <td className="px-4 py-3.5">
+                <div className="flex items-start gap-2">
+                  <div>
+                    <p className="text-sm text-ink">{t.description}</p>
+                    {t.specialtyId && (
+                      <p className="mt-0.5 text-[11px] text-ink-muted">
+                        {specialtyLabel(t.specialtyId)}
+                      </p>
                     )}
                   </div>
+                  {t.invoiceFileName && (
+                    <span
+                      title={t.invoiceFileName}
+                      className="mt-0.5 text-brass"
+                    >
+                      <Paperclip size={14} />
+                    </span>
+                  )}
+                </div>
+              </td>
+              {showArea && (
+                <td className="px-4 py-3.5 text-sm text-ink-soft">
+                  {rowMeta(t)}
                 </td>
-                {showArea && (
-                  <td className="px-4 py-3.5 text-sm text-ink-soft">{detail}</td>
-                )}
+              )}
+              <td className="px-4 py-3.5">
+                <TypeBadge type={t.type} />
+              </td>
+              <td className="px-4 py-3.5 text-right sm:px-6">
+                <div className="flex flex-col items-end">
+                  <AmountBlock t={t} />
+                </div>
+              </td>
+              {editable && (
                 <td className="px-4 py-3.5">
-                  <span
-                    className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.12em] ${
-                      t.type === 'ingreso'
-                        ? 'bg-olive/15 text-olive'
-                        : 'bg-rose/15 text-rose'
-                    }`}
-                  >
-                    {t.type}
-                  </span>
-                </td>
-                <td
-                  className={`px-4 py-3.5 text-right font-medium tabular-nums sm:px-6 ${
-                    t.type === 'ingreso' ? 'text-olive' : 'text-rose'
-                  }`}
-                >
-                  <div className="flex flex-col items-end gap-0.5">
-                    <span>
-                      {t.type === 'gasto' ? '−' : '+'}
-                      {formatCurrencyPrecise(t.netAmount ?? t.amount)}
-                      <span className="ml-1 text-[10px] font-normal uppercase tracking-[0.08em] text-ink-muted">
-                        base
-                      </span>
-                    </span>
-                    <span className="text-[11px] font-normal text-ink-muted">
-                      {t.vatExempt || t.vatRate === 0
-                        ? 'Exento'
-                        : `IVA ${formatCurrencyPrecise(t.vatAmount ?? 0)}`}
-                      {t.grossAmount != null &&
-                        ` · Total ${formatCurrencyPrecise(t.grossAmount)}`}
-                      {t.type === 'gasto' &&
-                        t.vatAmount != null &&
-                        t.vatAmount > 0 &&
-                        t.vatDeductible === false &&
-                        ' · No deducible'}
-                    </span>
+                  <div className="flex items-center justify-end gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setEditing(t)}
+                      className="flex h-8 w-8 items-center justify-center rounded-full border border-ink/10 text-ink-soft transition hover:border-ink/30 hover:bg-cream hover:text-ink"
+                      title="Editar"
+                      aria-label="Editar movimiento"
+                    >
+                      <Pencil size={14} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDelete(t)}
+                      className="flex h-8 w-8 items-center justify-center rounded-full border border-ink/10 text-ink-soft transition hover:border-rose/40 hover:bg-rose/10 hover:text-rose"
+                      title="Eliminar"
+                      aria-label="Eliminar movimiento"
+                    >
+                      <Trash2 size={14} />
+                    </button>
                   </div>
                 </td>
-                {editable && (
-                  <td className="px-4 py-3.5">
-                    <div className="flex items-center justify-end gap-1">
-                      <button
-                        type="button"
-                        onClick={() => setEditing(t)}
-                        className="flex h-8 w-8 items-center justify-center rounded-full border border-ink/10 text-ink-soft transition hover:border-ink/30 hover:bg-cream hover:text-ink"
-                        title="Editar"
-                        aria-label="Editar movimiento"
-                      >
-                        <Pencil size={14} />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleDelete(t)}
-                        className="flex h-8 w-8 items-center justify-center rounded-full border border-ink/10 text-ink-soft transition hover:border-rose/40 hover:bg-rose/10 hover:text-rose"
-                        title="Eliminar"
-                        aria-label="Eliminar movimiento"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  </td>
-                )}
-              </tr>
-            )
-          })}
+              )}
+            </tr>
+          ))}
         </tbody>
       </table>
     </div>
   )
 
+  const body = (
+    <>
+      {mobileList}
+      {desktopTable}
+    </>
+  )
+
   return (
     <>
       {bare ? (
-        table
+        body
       ) : (
         <Card className="animate-fade-up-delay-3 overflow-hidden !p-0">
-          <div className="p-6 pb-2">
+          <div className="p-4 pb-2 sm:p-6 sm:pb-2">
             <SectionTitle eyebrow={eyebrow} title={title} action={action} />
           </div>
-          {table}
+          {body}
         </Card>
       )}
 

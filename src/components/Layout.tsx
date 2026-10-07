@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
-import { LogOut, Plus, Wallet } from 'lucide-react'
+import { LogOut, Plus } from 'lucide-react'
 import { useState } from 'react'
 import { logout } from '../lib/auth'
 import { Button } from './ui'
@@ -11,8 +11,7 @@ interface Props {
 
 export function Layout({ onLogout }: Props) {
   const location = useLocation()
-  const [incomeOpen, setIncomeOpen] = useState(false)
-  const [expenseOpen, setExpenseOpen] = useState(false)
+  const [movementOpen, setMovementOpen] = useState(false)
 
   // Dentro de detalle de rama/especialidad ya hay botones propios
   const showHeaderActions = !location.pathname.startsWith('/rama/')
@@ -25,35 +24,28 @@ export function Layout({ onLogout }: Props) {
   return (
     <div className="min-h-screen">
       <header className="sticky top-0 z-40 border-b border-sand/70 bg-cream/85 backdrop-blur-md">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-5 py-4 md:px-8">
-          <NavLink to="/" className="group shrink-0">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-2 px-4 py-3 sm:gap-4 sm:px-5 sm:py-4 md:px-8">
+          <NavLink to="/" className="group min-w-0 shrink">
             <img
               src="/logo-clinica-burgos.png"
               alt="Clínica Burgos"
-              className="h-5 w-auto transition duration-200 group-hover:opacity-80 md:h-6"
+              className="h-5 w-auto max-w-[140px] object-contain object-left transition duration-200 group-hover:opacity-80 sm:max-w-none md:h-6"
             />
           </NavLink>
 
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
             {showHeaderActions && (
-              <>
-                <Button
-                  variant="secondary"
-                  className="!px-4"
-                  onClick={() => setExpenseOpen(true)}
-                >
-                  <Wallet size={14} />
-                  Gasto
-                </Button>
-                <Button className="!px-4" onClick={() => setIncomeOpen(true)}>
-                  <Plus size={14} />
-                  Ingreso
-                </Button>
-              </>
+              <Button
+                className="!px-3 sm:!px-4"
+                onClick={() => setMovementOpen(true)}
+              >
+                <Plus size={14} />
+                Movimiento
+              </Button>
             )}
             <Button
               variant="ghost"
-              className="!px-3"
+              className="!px-2.5 sm:!px-3"
               onClick={handleLogout}
               title="Salir de la sesión"
             >
@@ -64,7 +56,7 @@ export function Layout({ onLogout }: Props) {
         </div>
       </header>
 
-      <main className="mx-auto max-w-7xl px-5 py-8 md:px-8 md:py-10">
+      <main className="mx-auto max-w-7xl px-4 py-6 sm:px-5 sm:py-8 md:px-8 md:py-10">
         <Outlet />
       </main>
 
@@ -75,14 +67,9 @@ export function Layout({ onLogout }: Props) {
       </footer>
 
       <TransactionFormModal
-        open={incomeOpen}
-        onClose={() => setIncomeOpen(false)}
+        open={movementOpen}
+        onClose={() => setMovementOpen(false)}
         type="ingreso"
-      />
-      <TransactionFormModal
-        open={expenseOpen}
-        onClose={() => setExpenseOpen(false)}
-        type="gasto"
       />
     </div>
   )

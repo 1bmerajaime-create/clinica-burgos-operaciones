@@ -1,4 +1,5 @@
 import { useEffect, useId, useMemo, useState } from 'react'
+import { SlidersHorizontal } from 'lucide-react'
 import {
   Area,
   AreaChart,
@@ -18,7 +19,7 @@ import {
 } from '../lib/analytics'
 import { formatCurrencyPrecise } from '../lib/format'
 import type { AreaId, SpecialtyId, Transaction } from '../types'
-import { Card, Label, Select } from './ui'
+import { BottomSheet, Button, Card, Label, Select } from './ui'
 
 const INCOME_COLOR = '#5F8F5A'
 const EXPENSE_COLOR = '#C45C5C'
@@ -103,6 +104,8 @@ export function FinanceChart({
   const years = useMemo(() => availableYears(scopedTx), [scopedTx])
   const defaultYear = years[0] ?? new Date().getFullYear()
   const showAreaFilter = !areaId
+
+  const [filtersOpen, setFiltersOpen] = useState(false)
 
   const [chartType, setChartType] = useState<ChartType>('line')
   const [areaFilter, setAreaFilter] = useState<AreaFilter>('total')
@@ -222,133 +225,186 @@ export function FinanceChart({
     </>
   )
 
-  return (
-    <Card className="animate-fade-up-delay-2">
-      <div className="mb-5 flex flex-wrap items-start justify-between gap-4">
-        <h2 className="font-display text-xl font-medium tracking-tight text-ink md:text-2xl">
-          Evolución
-        </h2>
+  const filterSummary = useMemo(() => {
+    const parts = [
+      CHART_TYPES.find((o) => o.id === chartType)?.label,
+      showAreaFilter
+        ? AREA_FILTERS.find((o) => o.id === areaFilter)?.label
+        : null,
+      String(year),
+      PERIODS.find((o) => o.id === period)?.label,
+    ].filter(Boolean)
+    return parts.join(' · ')
+  }, [chartType, showAreaFilter, areaFilter, year, period])
 
-        <div className="flex w-full max-w-3xl flex-wrap gap-2 sm:gap-2.5">
-          <div className="min-w-[7.5rem] flex-1">
-            <Label htmlFor={`chart-type-${uid}`}>Tipo</Label>
-            <Select
-              id={`chart-type-${uid}`}
-              value={chartType}
-              onChange={(e) => setChartType(e.target.value as ChartType)}
-            >
-              {CHART_TYPES.map((opt) => (
-                <option key={opt.id} value={opt.id}>
-                  {opt.label}
-                </option>
-              ))}
-            </Select>
+  const filterFields = (
+    <>
+      <div>
+        <Label htmlFor={`chart-type-${uid}`}>Tipo</Label>
+        <Select
+          id={`chart-type-${uid}`}
+          value={chartType}
+          onChange={(e) => setChartType(e.target.value as ChartType)}
+        >
+          {CHART_TYPES.map((opt) => (
+            <option key={opt.id} value={opt.id}>
+              {opt.label}
+            </option>
+          ))}
+        </Select>
+      </div>
+      {showAreaFilter && (
+        <div>
+          <Label htmlFor={`chart-area-${uid}`}>Área</Label>
+          <Select
+            id={`chart-area-${uid}`}
+            value={areaFilter}
+            onChange={(e) => setAreaFilter(e.target.value as AreaFilter)}
+          >
+            {AREA_FILTERS.map((opt) => (
+              <option key={opt.id} value={opt.id}>
+                {opt.label}
+              </option>
+            ))}
+          </Select>
+        </div>
+      )}
+      <div>
+        <Label htmlFor={`chart-year-${uid}`}>Año</Label>
+        <Select
+          id={`chart-year-${uid}`}
+          value={year}
+          onChange={(e) => setYear(Number(e.target.value))}
+        >
+          {(years.length > 0 ? years : [defaultYear]).map((y) => (
+            <option key={y} value={y}>
+              {y}
+            </option>
+          ))}
+        </Select>
+      </div>
+      <div>
+        <Label htmlFor={`chart-period-${uid}`}>Periodo</Label>
+        <Select
+          id={`chart-period-${uid}`}
+          value={period}
+          onChange={(e) => setPeriod(e.target.value as ChartGranularity)}
+        >
+          {PERIODS.map((opt) => (
+            <option key={opt.id} value={opt.id}>
+              {opt.label}
+            </option>
+          ))}
+        </Select>
+      </div>
+      {showSemester && (
+        <div>
+          <Label htmlFor={`chart-semester-${uid}`}>Semestre</Label>
+          <Select
+            id={`chart-semester-${uid}`}
+            value={semester}
+            onChange={(e) => setSemester(Number(e.target.value) as Semester)}
+          >
+            {SEMESTERS.map((opt) => (
+              <option key={opt.id} value={opt.id}>
+                {opt.label}
+              </option>
+            ))}
+          </Select>
+        </div>
+      )}
+      {showQuarter && (
+        <div>
+          <Label htmlFor={`chart-quarter-${uid}`}>Trimestre</Label>
+          <Select
+            id={`chart-quarter-${uid}`}
+            value={quarter}
+            onChange={(e) => setQuarter(Number(e.target.value) as Quarter)}
+          >
+            {QUARTERS.map((opt) => (
+              <option key={opt.id} value={opt.id}>
+                {opt.label}
+              </option>
+            ))}
+          </Select>
+        </div>
+      )}
+      {showMonth && (
+        <div>
+          <Label htmlFor={`chart-month-${uid}`}>Mes</Label>
+          <Select
+            id={`chart-month-${uid}`}
+            value={month}
+            onChange={(e) => setMonth(Number(e.target.value))}
+          >
+            {MONTHS.map((opt) => (
+              <option key={opt.id} value={opt.id}>
+                {opt.label}
+              </option>
+            ))}
+          </Select>
+        </div>
+      )}
+    </>
+  )
+
+  return (
+    <Card className="animate-fade-up-delay-2 !p-4 sm:!p-6">
+      <div className="mb-4 space-y-3 sm:mb-5">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h2 className="font-display text-xl font-medium tracking-tight text-ink md:text-2xl">
+              Evolución
+            </h2>
+            <p className="mt-1 truncate text-[11px] text-ink-muted md:hidden">
+              {filterSummary}
+            </p>
           </div>
-          {showAreaFilter && (
-            <div className="min-w-[8rem] flex-1">
-              <Label htmlFor={`chart-area-${uid}`}>Área</Label>
-              <Select
-                id={`chart-area-${uid}`}
-                value={areaFilter}
-                onChange={(e) => setAreaFilter(e.target.value as AreaFilter)}
-              >
-                {AREA_FILTERS.map((opt) => (
-                  <option key={opt.id} value={opt.id}>
-                    {opt.label}
-                  </option>
-                ))}
-              </Select>
-            </div>
-          )}
-          <div className="min-w-[6.5rem] flex-1">
-            <Label htmlFor={`chart-year-${uid}`}>Año</Label>
-            <Select
-              id={`chart-year-${uid}`}
-              value={year}
-              onChange={(e) => setYear(Number(e.target.value))}
-            >
-              {(years.length > 0 ? years : [defaultYear]).map((y) => (
-                <option key={y} value={y}>
-                  {y}
-                </option>
-              ))}
-            </Select>
-          </div>
-          <div className="min-w-[7.5rem] flex-1">
-            <Label htmlFor={`chart-period-${uid}`}>Periodo</Label>
-            <Select
-              id={`chart-period-${uid}`}
-              value={period}
-              onChange={(e) => setPeriod(e.target.value as ChartGranularity)}
-            >
-              {PERIODS.map((opt) => (
-                <option key={opt.id} value={opt.id}>
-                  {opt.label}
-                </option>
-              ))}
-            </Select>
-          </div>
-          {showSemester && (
-            <div className="min-w-[8.5rem] flex-1">
-              <Label htmlFor={`chart-semester-${uid}`}>Semestre</Label>
-              <Select
-                id={`chart-semester-${uid}`}
-                value={semester}
-                onChange={(e) =>
-                  setSemester(Number(e.target.value) as Semester)
-                }
-              >
-                {SEMESTERS.map((opt) => (
-                  <option key={opt.id} value={opt.id}>
-                    {opt.label}
-                  </option>
-                ))}
-              </Select>
-            </div>
-          )}
-          {showQuarter && (
-            <div className="min-w-[8.5rem] flex-1">
-              <Label htmlFor={`chart-quarter-${uid}`}>Trimestre</Label>
-              <Select
-                id={`chart-quarter-${uid}`}
-                value={quarter}
-                onChange={(e) => setQuarter(Number(e.target.value) as Quarter)}
-              >
-                {QUARTERS.map((opt) => (
-                  <option key={opt.id} value={opt.id}>
-                    {opt.label}
-                  </option>
-                ))}
-              </Select>
-            </div>
-          )}
-          {showMonth && (
-            <div className="min-w-[8rem] flex-1">
-              <Label htmlFor={`chart-month-${uid}`}>Mes</Label>
-              <Select
-                id={`chart-month-${uid}`}
-                value={month}
-                onChange={(e) => setMonth(Number(e.target.value))}
-              >
-                {MONTHS.map((opt) => (
-                  <option key={opt.id} value={opt.id}>
-                    {opt.label}
-                  </option>
-                ))}
-              </Select>
-            </div>
-          )}
+
+          <Button
+            type="button"
+            variant="secondary"
+            className="shrink-0 !px-3.5 md:hidden"
+            onClick={() => setFiltersOpen(true)}
+          >
+            <SlidersHorizontal size={14} />
+            Filtros
+          </Button>
+        </div>
+
+        <div className="hidden grid-cols-2 gap-2.5 md:grid lg:flex lg:flex-nowrap lg:items-end lg:gap-2 lg:[&>div]:min-w-0 lg:[&>div]:flex-1">
+          {filterFields}
         </div>
       </div>
 
-      <div className="h-[360px] w-full md:h-[400px]">
+      <BottomSheet
+        open={filtersOpen}
+        onClose={() => setFiltersOpen(false)}
+        title="Filtros del gráfico"
+        footer={
+          <Button
+            type="button"
+            className="w-full"
+            onClick={() => setFiltersOpen(false)}
+          >
+            Ver resultados
+          </Button>
+        }
+      >
+        <div className="space-y-4">{filterFields}</div>
+      </BottomSheet>
+
+      <div className="h-[260px] w-full min-w-0 sm:h-[320px] md:h-[400px]">
         {data.length === 0 ? (
           <div className="flex h-full items-center justify-center text-sm text-ink-muted">
             No hay datos para estos filtros.
           </div>
         ) : chartType === 'bar' ? (
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+            <BarChart
+              data={data}
+              margin={{ top: 8, right: 4, left: -12, bottom: 0 }}
+            >
               {commonAxis}
               <Bar
                 dataKey="ingresos"
@@ -368,7 +424,10 @@ export function FinanceChart({
           </ResponsiveContainer>
         ) : (
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+            <AreaChart
+              data={data}
+              margin={{ top: 8, right: 4, left: -12, bottom: 0 }}
+            >
               <defs>
                 <linearGradient id={fillIngresosId} x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor={INCOME_COLOR} stopOpacity={0.4} />
