@@ -15,11 +15,11 @@ import { Login } from './pages/Login'
 import { Movements } from './pages/Movements'
 import { SpecialtyDetail } from './pages/SpecialtyDetail'
 
-function AuthenticatedApp() {
+function AuthenticatedApp({ onLogout }: { onLogout: () => void }) {
   return (
     <FinanceProvider>
       <Routes>
-        <Route element={<Layout />}>
+        <Route element={<Layout onLogout={onLogout} />}>
           <Route index element={<Dashboard />} />
           <Route path="movimientos" element={<Movements />} />
           <Route
@@ -57,7 +57,14 @@ function AppRoutes() {
     )
   }
 
-  return <AuthenticatedApp />
+  return (
+    <AuthenticatedApp
+      onLogout={() => {
+        setAuthed(false)
+        navigate('/', { replace: true })
+      }}
+    />
+  )
 }
 
 export default function App() {

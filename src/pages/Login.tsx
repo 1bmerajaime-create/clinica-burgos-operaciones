@@ -23,19 +23,22 @@ export function Login({ onSuccess }: Props) {
   }
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center px-5 py-10">
-      <img
-        src="/logo-clinica-burgos.png"
-        alt="Clínica Burgos"
-        className="mb-6 h-7 w-auto animate-fade-up md:h-8"
-      />
+    <div className="grid min-h-screen grid-rows-[1fr_auto_1fr] justify-items-center px-5">
+      {/* Zona superior: logo centrado → mismo espacio arriba y abajo hasta la card */}
+      <div className="flex w-full items-center justify-center">
+        <img
+          src="/logo-clinica-burgos.png"
+          alt="Clínica Burgos"
+          className="h-6 w-auto animate-fade-up md:h-7"
+        />
+      </div>
 
       <form
         onSubmit={handleSubmit}
         className="w-full max-w-sm animate-fade-up rounded-[1.25rem] border border-sand/60 bg-white-soft/90 px-6 py-8 shadow-[0_10px_40px_rgba(45,41,38,0.04)] backdrop-blur-sm"
       >
         <div className="mb-8 text-center">
-          <h1 className="font-display text-2xl font-medium tracking-tight text-[#4A3428] md:text-[1.65rem]">
+          <h1 className="font-display text-lg font-medium tracking-tight text-[#4A3428] md:text-xl">
             Centro de operaciones
           </h1>
           <p className="mt-1.5 text-sm text-ink-soft">Acceso interno</p>
@@ -76,6 +79,9 @@ export function Login({ onSuccess }: Props) {
           </Button>
         </div>
       </form>
+
+      {/* Zona inferior simétrica: mantiene la card centrada en pantalla */}
+      <div aria-hidden />
     </div>
   )
 }

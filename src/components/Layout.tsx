@@ -1,16 +1,26 @@
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
-import { Plus, Wallet } from 'lucide-react'
+import { LogOut, Plus, Wallet } from 'lucide-react'
 import { useState } from 'react'
+import { logout } from '../lib/auth'
 import { Button } from './ui'
 import { TransactionFormModal } from './TransactionFormModal'
 
-export function Layout() {
+interface Props {
+  onLogout: () => void
+}
+
+export function Layout({ onLogout }: Props) {
   const location = useLocation()
   const [incomeOpen, setIncomeOpen] = useState(false)
   const [expenseOpen, setExpenseOpen] = useState(false)
 
   // Dentro de detalle de rama/especialidad ya hay botones propios
   const showHeaderActions = !location.pathname.startsWith('/rama/')
+
+  function handleLogout() {
+    logout()
+    onLogout()
+  }
 
   return (
     <div className="min-h-screen">
@@ -24,22 +34,33 @@ export function Layout() {
             />
           </NavLink>
 
-          {showHeaderActions && (
-            <div className="flex items-center gap-2">
-              <Button
-                variant="secondary"
-                className="!px-4"
-                onClick={() => setExpenseOpen(true)}
-              >
-                <Wallet size={14} />
-                Gasto
-              </Button>
-              <Button className="!px-4" onClick={() => setIncomeOpen(true)}>
-                <Plus size={14} />
-                Ingreso
-              </Button>
-            </div>
-          )}
+          <div className="flex items-center gap-2">
+            {showHeaderActions && (
+              <>
+                <Button
+                  variant="secondary"
+                  className="!px-4"
+                  onClick={() => setExpenseOpen(true)}
+                >
+                  <Wallet size={14} />
+                  Gasto
+                </Button>
+                <Button className="!px-4" onClick={() => setIncomeOpen(true)}>
+                  <Plus size={14} />
+                  Ingreso
+                </Button>
+              </>
+            )}
+            <Button
+              variant="ghost"
+              className="!px-3"
+              onClick={handleLogout}
+              title="Salir de la sesión"
+            >
+              <LogOut size={14} />
+              <span className="hidden sm:inline">Salir</span>
+            </Button>
+          </div>
         </div>
       </header>
 
