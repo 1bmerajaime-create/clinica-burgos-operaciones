@@ -1,12 +1,16 @@
-import { NavLink, Outlet } from 'react-router-dom'
+import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { Plus, Wallet } from 'lucide-react'
 import { useState } from 'react'
 import { Button } from './ui'
 import { TransactionFormModal } from './TransactionFormModal'
 
 export function Layout() {
+  const location = useLocation()
   const [incomeOpen, setIncomeOpen] = useState(false)
   const [expenseOpen, setExpenseOpen] = useState(false)
+
+  // Dentro de detalle de rama/especialidad ya hay botones propios
+  const showHeaderActions = !location.pathname.startsWith('/rama/')
 
   return (
     <div className="min-h-screen">
@@ -20,20 +24,22 @@ export function Layout() {
             />
           </NavLink>
 
-          <div className="flex items-center gap-2">
-            <Button
-              variant="secondary"
-              className="!px-4"
-              onClick={() => setExpenseOpen(true)}
-            >
-              <Wallet size={14} />
-              Gasto
-            </Button>
-            <Button className="!px-4" onClick={() => setIncomeOpen(true)}>
-              <Plus size={14} />
-              Ingreso
-            </Button>
-          </div>
+          {showHeaderActions && (
+            <div className="flex items-center gap-2">
+              <Button
+                variant="secondary"
+                className="!px-4"
+                onClick={() => setExpenseOpen(true)}
+              >
+                <Wallet size={14} />
+                Gasto
+              </Button>
+              <Button className="!px-4" onClick={() => setIncomeOpen(true)}>
+                <Plus size={14} />
+                Ingreso
+              </Button>
+            </div>
+          )}
         </div>
       </header>
 

@@ -3,7 +3,11 @@ import { AREAS, SPECIALTIES, areaNeedsSpecialty } from '../data/areas'
 import { useFinance } from '../context/FinanceContext'
 import { extractInvoiceFields } from '../lib/invoiceOcr'
 import { formatCurrencyPrecise } from '../lib/format'
-import { vatFromNet, vatRateFor } from '../lib/vat'
+import {
+  defaultVatRateFor,
+  formatVatPercent,
+  resolveVatAmounts,
+} from '../lib/vat'
 import type {
   AreaId,
   SpecialtyId,
@@ -19,6 +23,10 @@ interface Props {
   defaultAreaId?: AreaId
   defaultSpecialtyId?: SpecialtyId
   transaction?: Transaction | null
+}
+
+function rateToInput(rate: number): string {
+  return formatVatPercent(rate)
 }
 
 export function TransactionFormModal({
@@ -38,6 +46,12 @@ export function TransactionFormModal({
     defaultSpecialtyId,
   )
   const [amount, setAmount] = useState('')
+  const [amountIncludesVat, setAmountIncludesVat] = useState(false)
+  const [vatExempt, setVatExempt] = useState(false)
+  const [vatRateInput, setVatRateInput] = useState(() =>
+    rateToInput(defaultVatRateFor(typeProp)),
+  )
+  const [vatDeductible, setVatDeductible] = useState(true)
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [description, setDescription] = useState('')
   const [fileName, setFileName] = useState('')
@@ -48,13 +62,22 @@ export function TransactionFormModal({
 
   const needsSpecialty = areaNeedsSpecialty(areaId)
 
+  const parsedRate = useMemo(() => {
+    if (vatExempt) return 0
+    const n = Number(vatRateInput.replace(',', '.'))
+    if (!Number.isFinite(n) || n < 0) return defaultVatRateFor(type)
+    return n / 100
+  }, [vatExempt, vatRateInput, type])
+
   const vatBreakdown = useMemo(() => {
     const value = Number(amount.replace(',', '.'))
     if (!value || value <= 0) return null
-    return vatFromNet(value, type)
-  }, [type, amount])
-
-  const vatPercent = (vatRateFor(type) * 100).toFixed(0)
+    return resolveVatAmounts({
+      amount: value,
+      vatRate: parsedRate,
+      amountIncludesVat,
+    })
+  }, [amount, parsedRate, amountIncludesVat])
 
   useEffect(() => {
     if (!open) return
@@ -63,7 +86,25 @@ export function TransactionFormModal({
       setType(transaction.type)
       setAreaId(transaction.areaId)
       setSpecialtyId(transaction.specialtyId ?? '')
-      setAmount(String(transaction.netAmount ?? transaction.amount))
+      const includes = Boolean(transaction.amountIncludesVat)
+      setAmountIncludesVat(includes)
+      setAmount(
+        String(
+          includes
+            ? (transaction.grossAmount ?? transaction.amount)
+            : (transaction.netAmount ?? transaction.amount),
+        ),
+      )
+      const exempt = Boolean(transaction.vatExempt) || transaction.vatRate === 0
+      setVatExempt(exempt)
+      setVatRateInput(
+        rateToInput(
+          exempt
+            ? defaultVatRateFor(transaction.type)
+            : (transaction.vatRate ?? defaultVatRateFor(transaction.type)),
+        ),
+      )
+      setVatDeductible(transaction.vatDeductible !== false)
       setDate(transaction.date)
       setDescription(transaction.description)
       setFileName(transaction.invoiceFileName ?? '')
@@ -80,6 +121,10 @@ export function TransactionFormModal({
       areaNeedsSpecialty(defaultAreaId) ? defaultSpecialtyId : '',
     )
     setAmount('')
+    setAmountIncludesVat(false)
+    setVatExempt(false)
+    setVatRateInput(rateToInput(defaultVatRateFor(typeProp)))
+    setVatDeductible(true)
     setDate(new Date().toISOString().slice(0, 10))
     setDescription('')
     setFileName('')
@@ -109,6 +154,13 @@ export function TransactionFormModal({
     }
   }
 
+  function handleTypeChange(next: TransactionType) {
+    setType(next)
+    if (!vatExempt) {
+      setVatRateInput(rateToInput(defaultVatRateFor(next)))
+    }
+  }
+
   async function handleFile(file: File) {
     setFileName(file.name)
     if (!description) setDescription(`Factura: ${file.name}`)
@@ -129,7 +181,11 @@ export function TransactionFormModal({
 
     try {
       const result = await extractInvoiceFields(file, setScanProgress)
-      if (result.amount != null) setAmount(result.amount.toFixed(2))
+      if (result.amount != null) {
+        setAmount(result.amount.toFixed(2))
+        // Las facturas suelen traer total con IVA
+        setAmountIncludesVat(true)
+      }
       if (result.date) setDate(result.date)
       if (result.description) setDescription(result.description)
 
@@ -167,16 +223,30 @@ export function TransactionFormModal({
     if (!value || value <= 0 || !description.trim()) return
     if (needsSpecialty && !specialtyId) return
 
-    const vat = vatFromNet(value, type)
+    const vat = resolveVatAmounts({
+      amount: value,
+      vatRate: parsedRate,
+      amountIncludesVat,
+    })
 
     const payload = {
       type,
       areaId,
       specialtyId: needsSpecialty ? (specialtyId as SpecialtyId) : undefined,
-      amount: vat.netAmount,
+      amount: value,
       netAmount: vat.netAmount,
       vatAmount: vat.vatAmount,
       grossAmount: vat.grossAmount,
+      vatRate: vat.vatRate,
+      vatExempt,
+      amountIncludesVat,
+      vatDeductible: type === 'gasto' ? vatDeductible && !vatExempt : undefined,
+      vatDeductibleShare:
+        type === 'gasto'
+          ? vatDeductible && !vatExempt
+            ? 1
+            : 0
+          : undefined,
       date,
       description: description.trim(),
       invoiceFileName: fileName || transaction?.invoiceFileName || undefined,
@@ -208,7 +278,9 @@ export function TransactionFormModal({
               <Select
                 id="type"
                 value={type}
-                onChange={(e) => setType(e.target.value as TransactionType)}
+                onChange={(e) =>
+                  handleTypeChange(e.target.value as TransactionType)
+                }
               >
                 <option value="ingreso">Ingreso</option>
                 <option value="gasto">Gasto</option>
@@ -228,8 +300,8 @@ export function TransactionFormModal({
                 {fileName || 'Adjuntar factura (JPG / PNG / PDF)'}
               </span>
               <span className="mt-1.5 text-xs text-ink-muted">
-                Si subes un documento, intentamos rellenar importe neto, fecha
-                y concepto
+                Si subes un documento, intentamos rellenar importe, fecha y
+                concepto
               </span>
               <input
                 id="invoice-file"
@@ -303,7 +375,9 @@ export function TransactionFormModal({
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
-              <Label htmlFor="amount">Importe neto (€)</Label>
+              <Label htmlFor="amount">
+                {amountIncludesVat ? 'Importe total (€)' : 'Importe base (€)'}
+              </Label>
               <Input
                 id="amount"
                 type="number"
@@ -327,13 +401,65 @@ export function TransactionFormModal({
             </div>
           </div>
 
-          <div className="rounded-2xl border border-sand/80 bg-cream-dark/50 px-4 py-3">
+          <div className="space-y-3 rounded-2xl border border-sand/80 bg-cream-dark/50 px-4 py-3">
             <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-ink-muted">
-              Desglose IVA {vatPercent}%
+              IVA (tipos provisionales)
             </p>
-            <dl className="mt-2 space-y-1.5 text-sm">
+            <p className="text-[11px] leading-relaxed text-ink-muted">
+              Los porcentajes son configurables y pendientes de validación
+              fiscal con la asesoría. No son un tipo legal validado.
+            </p>
+
+            <label className="flex cursor-pointer items-start gap-2.5 text-sm text-ink">
+              <input
+                type="checkbox"
+                className="mt-0.5 accent-ink"
+                checked={amountIncludesVat}
+                onChange={(e) => setAmountIncludesVat(e.target.checked)}
+              />
+              <span>El importe incluye IVA</span>
+            </label>
+
+            <label className="flex cursor-pointer items-start gap-2.5 text-sm text-ink">
+              <input
+                type="checkbox"
+                className="mt-0.5 accent-ink"
+                checked={vatExempt}
+                onChange={(e) => setVatExempt(e.target.checked)}
+              />
+              <span>Operación exenta de IVA</span>
+            </label>
+
+            {!vatExempt && (
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <Label htmlFor="vat-rate">Tipo IVA (%)</Label>
+                  <Input
+                    id="vat-rate"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={vatRateInput}
+                    onChange={(e) => setVatRateInput(e.target.value)}
+                  />
+                </div>
+                {type === 'gasto' && (
+                  <label className="flex cursor-pointer items-center gap-2.5 self-end pb-3 text-sm text-ink">
+                    <input
+                      type="checkbox"
+                      className="accent-ink"
+                      checked={vatDeductible}
+                      onChange={(e) => setVatDeductible(e.target.checked)}
+                    />
+                    <span>IVA soportado deducible</span>
+                  </label>
+                )}
+              </div>
+            )}
+
+            <dl className="space-y-1.5 border-t border-sand/70 pt-3 text-sm">
               <div className="flex items-center justify-between gap-4">
-                <dt className="text-ink-soft">Neto</dt>
+                <dt className="text-ink-soft">Base (sin IVA)</dt>
                 <dd className="tabular-nums text-ink">
                   {vatBreakdown
                     ? formatCurrencyPrecise(vatBreakdown.netAmount)
@@ -341,15 +467,30 @@ export function TransactionFormModal({
                 </dd>
               </div>
               <div className="flex items-center justify-between gap-4">
-                <dt className="text-ink-soft">IVA {vatPercent}%</dt>
+                <dt className="text-ink-soft">
+                  {type === 'ingreso' ? 'IVA repercutido' : 'IVA soportado'}
+                  {!vatExempt && ` (${formatVatPercent(parsedRate)} %)`}
+                </dt>
                 <dd className="tabular-nums text-ink">
                   {vatBreakdown
                     ? formatCurrencyPrecise(vatBreakdown.vatAmount)
                     : '—'}
                 </dd>
               </div>
+              {type === 'gasto' && !vatExempt && (
+                <div className="flex items-center justify-between gap-4">
+                  <dt className="text-ink-soft">IVA deducible</dt>
+                  <dd className="tabular-nums text-ink">
+                    {vatBreakdown
+                      ? formatCurrencyPrecise(
+                          vatDeductible ? vatBreakdown.vatAmount : 0,
+                        )
+                      : '—'}
+                  </dd>
+                </div>
+              )}
               <div className="flex items-center justify-between gap-4 border-t border-sand/70 pt-1.5">
-                <dt className="font-medium text-ink">Total bruto</dt>
+                <dt className="font-medium text-ink">Total</dt>
                 <dd className="font-medium tabular-nums text-ink">
                   {vatBreakdown
                     ? formatCurrencyPrecise(vatBreakdown.grossAmount)

@@ -137,6 +137,7 @@ export function Modal({
   open,
   onClose,
   title,
+  eyebrow,
   children,
   size = 'md',
   elevated = false,
@@ -144,14 +145,16 @@ export function Modal({
   open: boolean
   onClose: () => void
   title: string
+  eyebrow?: string
   children: ReactNode
-  size?: 'md' | 'lg'
+  size?: 'md' | 'lg' | 'xl'
   /** Por encima de otro modal (p.ej. formulario sobre listado) */
   elevated?: boolean
 }) {
   if (!open || typeof document === 'undefined') return null
 
-  const width = size === 'lg' ? 'max-w-4xl' : 'max-w-lg'
+  const width =
+    size === 'xl' ? 'max-w-5xl' : size === 'lg' ? 'max-w-4xl' : 'max-w-lg'
 
   return createPortal(
     <div
@@ -169,11 +172,20 @@ export function Modal({
         className={`relative z-10 flex max-h-[90vh] w-full ${width} animate-fade-up flex-col rounded-[1.5rem] border border-sand bg-cream p-6 shadow-2xl sm:p-8`}
       >
         <div className="mb-4 flex shrink-0 items-start justify-between gap-4">
-          <h3 className="font-display text-2xl font-medium text-ink">{title}</h3>
+          <div>
+            {eyebrow && (
+              <p className="mb-1 text-[10px] font-medium uppercase tracking-[0.16em] text-ink-muted">
+                {eyebrow}
+              </p>
+            )}
+            <h3 className="font-display text-2xl font-medium text-ink">
+              {title}
+            </h3>
+          </div>
           <button
             type="button"
             onClick={onClose}
-            className="flex h-9 w-9 items-center justify-center rounded-full border border-ink/15 text-ink-soft transition hover:border-ink/40 hover:text-ink"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-ink/15 text-ink-soft transition hover:border-ink/40 hover:text-ink"
           >
             ✕
           </button>

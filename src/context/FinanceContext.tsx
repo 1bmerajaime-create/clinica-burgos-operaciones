@@ -11,7 +11,11 @@ import {
   SEED_PRODUCT_SALES,
   SEED_TRANSACTIONS,
 } from '../data/seed'
-import { vatFromNet } from '../lib/vat'
+import {
+  defaultVatRateFor,
+  normalizeVatTransaction,
+  resolveVatAmounts,
+} from '../lib/vat'
 import type {
   AestheticProduct,
   AreaId,
@@ -29,30 +33,37 @@ export interface NewTransactionInput {
   netAmount?: number
   vatAmount?: number
   grossAmount?: number
+  vatRate?: number
+  vatExempt?: boolean
+  amountIncludesVat?: boolean
+  vatDeductible?: boolean
+  vatDeductibleShare?: number
   date: string
   description: string
   invoiceFileName?: string
 }
 
 function withVatFields(input: NewTransactionInput): NewTransactionInput {
-  const breakdown = vatFromNet(input.netAmount ?? input.amount, input.type)
-  return {
+  const exempt = Boolean(input.vatExempt) || input.vatRate === 0
+  const vatRate = exempt
+    ? 0
+    : (input.vatRate ?? defaultVatRateFor(input.type))
+  const breakdown = resolveVatAmounts({
+    amount: input.amount,
+    vatRate,
+    amountIncludesVat: Boolean(input.amountIncludesVat),
+  })
+  return normalizeVatTransaction({
     ...input,
-    amount: breakdown.netAmount,
     ...breakdown,
-  }
+    amount: breakdown.netAmount,
+    vatRate,
+    vatExempt: exempt,
+  })
 }
 
 function normalizeTransaction(tx: Transaction): Transaction {
-  if (
-    tx.netAmount != null &&
-    tx.vatAmount != null &&
-    tx.grossAmount != null
-  ) {
-    return { ...tx, amount: tx.netAmount }
-  }
-  const breakdown = vatFromNet(tx.netAmount ?? tx.amount, tx.type)
-  return { ...tx, amount: breakdown.netAmount, ...breakdown }
+  return normalizeVatTransaction(tx)
 }
 
 export interface NewProductInput {
@@ -89,7 +100,7 @@ interface FinanceContextValue {
 
 const FinanceContext = createContext<FinanceContextValue | null>(null)
 
-const TX_KEY = 'cb-operaciones-transactions-v9'
+const TX_KEY = 'cb-operaciones-transactions-v10'
 const INV_KEY = 'cb-operaciones-inventory-v4'
 
 function loadTransactions(): Transaction[] {
@@ -251,30 +262,42 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
       if (register) {
         incomeTransactionId = uid('tx')
         expenseTransactionId = uid('tx')
-        const incomeBreakdown = vatFromNet(revenue, 'ingreso')
-        const expenseBreakdown = vatFromNet(cogs, 'gasto')
-        const income: Transaction = {
+        const incomeBreakdown = resolveVatAmounts({
+          amount: revenue,
+          vatRate: defaultVatRateFor('ingreso'),
+          amountIncludesVat: false,
+        })
+        const expenseBreakdown = resolveVatAmounts({
+          amount: cogs,
+          vatRate: defaultVatRateFor('gasto'),
+          amountIncludesVat: false,
+        })
+        const income: Transaction = normalizeVatTransaction({
           id: incomeTransactionId,
           type: 'ingreso',
           areaId: product.areaId,
-          specialtyId: 'estetica',
+          specialtyId: 'estetica' as const,
           amount: incomeBreakdown.netAmount,
           ...incomeBreakdown,
+          amountIncludesVat: false,
           date: input.date,
           description: `Venta producto: ${product.name} × ${input.quantity}`,
           createdAt: now,
-        }
-        const expense: Transaction = {
+        })
+        const expense: Transaction = normalizeVatTransaction({
           id: expenseTransactionId,
           type: 'gasto',
           areaId: product.areaId,
-          specialtyId: 'estetica',
+          specialtyId: 'estetica' as const,
           amount: expenseBreakdown.netAmount,
           ...expenseBreakdown,
+          amountIncludesVat: false,
+          vatDeductible: true,
+          vatDeductibleShare: 1,
           date: input.date,
           description: `Coste producto: ${product.name} × ${input.quantity}`,
           createdAt: now,
-        }
+        })
         nextTx = [income, expense, ...transactions]
         persistTx(nextTx)
       }

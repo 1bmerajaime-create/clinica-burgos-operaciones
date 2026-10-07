@@ -118,27 +118,27 @@ export function TransactionTable({
                     t.type === 'ingreso' ? 'text-olive' : 'text-rose'
                   }`}
                 >
-                  {t.grossAmount != null ? (
-                    <div className="flex flex-col items-end gap-0.5">
-                      <span>
-                        {t.type === 'gasto' ? '−' : '+'}
-                        {formatCurrencyPrecise(t.grossAmount)}
-                        <span className="ml-1 text-[10px] font-normal uppercase tracking-[0.08em] text-ink-muted">
-                          bruto
-                        </span>
-                      </span>
-                      <span className="text-[11px] font-normal text-ink-muted">
-                        Neto {formatCurrencyPrecise(t.netAmount ?? t.amount)}
-                        {' · '}
-                        IVA {formatCurrencyPrecise(t.vatAmount ?? 0)}
-                      </span>
-                    </div>
-                  ) : (
-                    <>
+                  <div className="flex flex-col items-end gap-0.5">
+                    <span>
                       {t.type === 'gasto' ? '−' : '+'}
-                      {formatCurrencyPrecise(t.amount)}
-                    </>
-                  )}
+                      {formatCurrencyPrecise(t.netAmount ?? t.amount)}
+                      <span className="ml-1 text-[10px] font-normal uppercase tracking-[0.08em] text-ink-muted">
+                        base
+                      </span>
+                    </span>
+                    <span className="text-[11px] font-normal text-ink-muted">
+                      {t.vatExempt || t.vatRate === 0
+                        ? 'Exento'
+                        : `IVA ${formatCurrencyPrecise(t.vatAmount ?? 0)}`}
+                      {t.grossAmount != null &&
+                        ` · Total ${formatCurrencyPrecise(t.grossAmount)}`}
+                      {t.type === 'gasto' &&
+                        t.vatAmount != null &&
+                        t.vatAmount > 0 &&
+                        t.vatDeductible === false &&
+                        ' · No deducible'}
+                    </span>
+                  </div>
                 </td>
                 {editable && (
                   <td className="px-4 py-3.5">

@@ -23,14 +23,37 @@ export interface Transaction {
   type: TransactionType
   areaId: AreaId
   specialtyId?: SpecialtyId
-  /** Importe base usado en balances (siempre el neto) */
+  /**
+   * Base imponible (sin IVA). Es el importe usado en balances de
+   * ingresos/gastos para no tratar el IVA como beneficio.
+   */
   amount: number
-  /** Base imponible (neto) */
+  /** Base imponible (sin IVA) */
   netAmount?: number
-  /** IVA: 15% en ingresos, 21% en gastos */
+  /** Cuota de IVA */
   vatAmount?: number
-  /** Neto + IVA */
+  /** Total con IVA */
   grossAmount?: number
+  /**
+   * Tipo IVA aplicado (fracción, p.ej. 0.15).
+   * Configurable por operación; 0 si está exenta.
+   * Los valores por defecto (15 % / 21 %) son provisionales.
+   */
+  vatRate?: number
+  /** Operación exenta de IVA */
+  vatExempt?: boolean
+  /**
+   * true si el importe introducido al crear/editar incluía IVA (bruto).
+   * false/undefined = se introdujo la base.
+   */
+  amountIncludesVat?: boolean
+  /**
+   * Solo gastos: si el IVA soportado es deducible.
+   * No se asume siempre deducible; por defecto true al crear salvo que se indique.
+   */
+  vatDeductible?: boolean
+  /** Solo gastos: fracción deducible 0–1 (si no se indica y vatDeductible, 1) */
+  vatDeductibleShare?: number
   date: string
   description: string
   invoiceFileName?: string

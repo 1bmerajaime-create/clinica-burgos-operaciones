@@ -37,7 +37,7 @@ export function SignedAmount({
         <span className="font-sans text-[0.85em] font-medium leading-none">
           {sign}
         </span>
-        <span className="font-display text-4xl font-medium leading-none tracking-tight">
+        <span className="font-display text-[1.35rem] font-medium leading-none tracking-tight sm:text-3xl md:text-4xl">
           {amount}
         </span>
       </span>
