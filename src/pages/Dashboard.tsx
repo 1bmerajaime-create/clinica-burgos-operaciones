@@ -5,44 +5,59 @@ import { SignedAmount } from '../components/SignedAmount'
 import { TransactionTable } from '../components/TransactionTable'
 import { Card } from '../components/ui'
 import { useFinance } from '../context/FinanceContext'
-import { AREAS } from '../data/areas'
-import { areaBreakdown, recentTransactions, sumByType } from '../lib/analytics'
+import { getArea } from '../data/areas'
+import { areaBreakdown, recentTransactions } from '../lib/analytics'
+import { estimateVatPosition } from '../lib/vat'
+import type { AreaId } from '../types'
+
+const DASHBOARD_AREAS: AreaId[] = ['clinica', 'quiron']
 
 export function Dashboard() {
   const { transactions } = useFinance()
 
-  const ingresos = sumByType(transactions, 'ingreso')
-  const gastos = sumByType(transactions, 'gasto')
-  const balanceTotal = ingresos - gastos
   const groupStats = areaBreakdown(transactions)
   const recent = recentTransactions(transactions, 8)
+  const vat = estimateVatPosition(transactions)
 
-  const balances = [
-    {
-      id: 'total' as const,
-      label: 'Balance total',
-      value: balanceTotal,
-      ingresos,
-      gastos,
-      href: undefined as string | undefined,
-    },
-    ...AREAS.map((area) => {
-      const stats = groupStats.find((g) => g.areaId === area.id)!
-      return {
-        id: area.id,
-        label: area.name,
-        value: stats.resultado,
-        ingresos: stats.ingresos,
-        gastos: stats.gastos,
-        href: `/rama/${area.id}`,
-      }
-    }),
-  ]
+  const areaCards = DASHBOARD_AREAS.map((areaId) => {
+    const area = getArea(areaId)!
+    const stats = groupStats.find((g) => g.areaId === areaId)!
+    return {
+      id: areaId,
+      label: area.name,
+      value: stats.resultado,
+      primaryLabel: 'Ingreso',
+      primaryValue: stats.ingresos,
+      primaryKind: 'income' as const,
+      secondaryLabel: 'Gasto',
+      secondaryValue: stats.gastos,
+      secondaryKind: 'expense' as const,
+      href: `/rama/${areaId}` as string | undefined,
+      resultKind: 'result' as const,
+    }
+  })
+
+  const vatCard = {
+    id: 'iva',
+    label: 'IVA estimado',
+    value: vat.net,
+    primaryLabel: 'Devengado',
+    primaryValue: vat.accrued,
+    primaryKind: 'income' as const,
+    secondaryLabel: 'Pagado',
+    secondaryValue: vat.paid,
+    secondaryKind: 'expense' as const,
+    href: undefined as string | undefined,
+    /** Positivo = a pagar → rojo; negativo = a favor → verde */
+    resultKind: (vat.net > 0 ? 'expense' : 'income') as 'expense' | 'income',
+  }
+
+  const cards = [...areaCards, vatCard]
 
   return (
     <div className="space-y-8">
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {balances.map((item, i) => {
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        {cards.map((item, i) => {
           const content = (
             <Card
               className={`h-full ${
@@ -66,16 +81,30 @@ export function Dashboard() {
                 </div>
 
                 <div className="flex flex-col items-stretch gap-2">
-                  <SignedAmount value={item.value} size="lg" />
+                  <SignedAmount
+                    value={item.value}
+                    kind={item.resultKind}
+                    size="lg"
+                  />
 
                   <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1 text-xs">
                     <span className="inline-flex items-baseline gap-1.5">
-                      <span className="text-ink-muted">Ingreso</span>
-                      <SignedAmount value={item.ingresos} kind="income" forceSign="+" />
+                      <span className="text-ink-muted">{item.primaryLabel}</span>
+                      <SignedAmount
+                        value={item.primaryValue}
+                        kind={item.primaryKind}
+                        forceSign="+"
+                      />
                     </span>
                     <span className="inline-flex items-baseline gap-1.5">
-                      <span className="text-ink-muted">Gasto</span>
-                      <SignedAmount value={item.gastos} kind="expense" forceSign="−" />
+                      <span className="text-ink-muted">
+                        {item.secondaryLabel}
+                      </span>
+                      <SignedAmount
+                        value={item.secondaryValue}
+                        kind={item.secondaryKind}
+                        forceSign="−"
+                      />
                     </span>
                   </div>
                 </div>

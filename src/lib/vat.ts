@@ -1,4 +1,4 @@
-import type { TransactionType } from '../types'
+import type { Transaction, TransactionType } from '../types'
 
 /** IVA sobre el neto en ingresos. */
 export const INCOME_VAT_RATE = 0.15
@@ -30,6 +30,32 @@ export function vatFromNet(
 /** @deprecated Prefer vatFromNet(net, 'ingreso') */
 export function incomeVatFromNet(net: number): VatBreakdown {
   return vatFromNet(net, 'ingreso')
+}
+
+function vatOf(tx: Transaction): number {
+  if (tx.vatAmount != null) return tx.vatAmount
+  return vatFromNet(tx.netAmount ?? tx.amount, tx.type).vatAmount
+}
+
+/**
+ * Estimación IVA: devengado (ingresos) − pagado/soportado (gastos).
+ * Positivo → a pagar; negativo → a favor.
+ */
+export function estimateVatPosition(transactions: Transaction[]) {
+  let accrued = 0
+  let paid = 0
+  for (const tx of transactions) {
+    const vat = vatOf(tx)
+    if (tx.type === 'ingreso') accrued += vat
+    else paid += vat
+  }
+  accrued = roundMoney(accrued)
+  paid = roundMoney(paid)
+  return {
+    accrued,
+    paid,
+    net: roundMoney(accrued - paid),
+  }
 }
 
 function roundMoney(value: number): number {

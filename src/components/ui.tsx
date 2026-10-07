@@ -71,8 +71,11 @@ export function Label({ children, htmlFor }: { children: ReactNode; htmlFor?: st
 const fieldClass =
   'w-full rounded-2xl border border-sand bg-cream/50 px-4 py-3 text-sm text-ink outline-none transition focus:border-ink/30 focus:bg-white-soft placeholder:text-ink-muted/70'
 
-export function Input(props: InputHTMLAttributes<HTMLInputElement>) {
-  return <input className={fieldClass} {...props} />
+export function Input({
+  className = '',
+  ...props
+}: InputHTMLAttributes<HTMLInputElement>) {
+  return <input className={`${fieldClass} ${className}`} {...props} />
 }
 
 export function Select(props: SelectHTMLAttributes<HTMLSelectElement>) {
