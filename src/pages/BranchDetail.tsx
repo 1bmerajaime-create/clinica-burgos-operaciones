@@ -195,12 +195,7 @@ export function BranchDetail() {
         </Card>
       )}
 
-      <FinanceChart
-        transactions={transactions}
-        areaId={id}
-        eyebrow={area.shortName}
-        title="Evolución"
-      />
+      <FinanceChart transactions={transactions} areaId={id} />
 
       <TransactionTable
         transactions={areaTransactions.slice(0, 12)}

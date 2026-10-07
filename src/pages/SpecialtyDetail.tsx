@@ -163,8 +163,6 @@ export function SpecialtyDetail() {
         transactions={transactions}
         areaId={id}
         specialtyId={specId}
-        eyebrow={specialty.name}
-        title="Evolución"
       />
 
       {specId === 'estetica' && <ProductsSection areaId={id} />}

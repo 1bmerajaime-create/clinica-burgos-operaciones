@@ -80,16 +80,12 @@ interface Props {
   areaId?: AreaId
   /** Filtra por especialidad (detalle de especialidad) */
   specialtyId?: SpecialtyId
-  eyebrow?: string
-  title?: string
 }
 
 export function FinanceChart({
   transactions,
   areaId,
   specialtyId,
-  eyebrow = 'Evolución',
-  title = 'Ingresos y gastos',
 }: Props) {
   const uid = useId().replace(/:/g, '')
   const fillIngresosId = `fillIngresos-${uid}`
@@ -222,14 +218,9 @@ export function FinanceChart({
   return (
     <Card className="animate-fade-up-delay-2">
       <div className="mb-5 flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <p className="mb-1 text-[10px] font-medium uppercase tracking-[0.2em] text-ink-muted">
-            {eyebrow}
-          </p>
-          <h2 className="font-display text-xl font-medium tracking-tight text-ink md:text-2xl">
-            {title}
-          </h2>
-        </div>
+        <h2 className="font-display text-xl font-medium tracking-tight text-ink md:text-2xl">
+          Evolución
+        </h2>
 
         <div className="flex w-full max-w-3xl flex-wrap gap-2 sm:gap-2.5">
           <div className="min-w-[7.5rem] flex-1">

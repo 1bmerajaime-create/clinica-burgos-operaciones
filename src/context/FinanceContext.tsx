@@ -64,15 +64,15 @@ interface FinanceContextValue {
 
 const FinanceContext = createContext<FinanceContextValue | null>(null)
 
-const TX_KEY = 'cb-operaciones-transactions-v3'
-const INV_KEY = 'cb-operaciones-inventory-v1'
+const TX_KEY = 'cb-operaciones-transactions-v4'
+const INV_KEY = 'cb-operaciones-inventory-v2'
 
 function loadTransactions(): Transaction[] {
   try {
     const raw = localStorage.getItem(TX_KEY)
     if (raw) {
       const parsed = JSON.parse(raw) as Transaction[]
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed
+      if (Array.isArray(parsed)) return parsed
     }
   } catch {
     /* ignore */
@@ -88,10 +88,10 @@ function loadInventory(): { products: AestheticProduct[]; sales: ProductSale[] }
         products?: AestheticProduct[]
         sales?: ProductSale[]
       }
-      if (parsed.products && parsed.products.length > 0) {
+      if (Array.isArray(parsed.products)) {
         return {
           products: parsed.products,
-          sales: parsed.sales ?? [],
+          sales: Array.isArray(parsed.sales) ? parsed.sales : [],
         }
       }
     }
