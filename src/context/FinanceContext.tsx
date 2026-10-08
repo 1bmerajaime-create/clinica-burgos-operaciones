@@ -14,7 +14,7 @@ import {
 import {
   defaultVatRateFor,
   normalizeVatTransaction,
-  reinterpretAsNetBase,
+  reinterpretAsVatFromTotal,
   resolveVatAmounts,
 } from '../lib/vat'
 import type {
@@ -49,8 +49,8 @@ function withVatFields(input: NewTransactionInput): NewTransactionInput {
   const vatRate = exempt
     ? 0
     : (input.vatRate ?? defaultVatRateFor(input.type))
-  // Por defecto: IVA = importe × tipo (el importe es la base)
-  const amountIncludesVat = input.amountIncludesVat === true
+  // Por defecto: IVA = total × tipo (el importe es el total)
+  const amountIncludesVat = input.amountIncludesVat !== false
   const breakdown = resolveVatAmounts({
     amount: input.amount,
     vatRate,
@@ -104,9 +104,12 @@ interface FinanceContextValue {
 
 const FinanceContext = createContext<FinanceContextValue | null>(null)
 
-const TX_KEY = 'cb-operaciones-transactions-v12'
-const TX_KEY_V11 = 'cb-operaciones-transactions-v11'
-const TX_KEY_V10 = 'cb-operaciones-transactions-v10'
+const TX_KEY = 'cb-operaciones-transactions-v13'
+const TX_KEY_LEGACY = [
+  'cb-operaciones-transactions-v12',
+  'cb-operaciones-transactions-v11',
+  'cb-operaciones-transactions-v10',
+] as const
 const INV_KEY = 'cb-operaciones-inventory-v4'
 
 function persistMigrated(txs: Transaction[]): Transaction[] {
@@ -125,35 +128,27 @@ function loadTransactions(): Transaction[] {
     /* ignore */
   }
 
-  // v11 usaba desglose «total ÷ 1,15»; pasamos a IVA = importe × %.
-  try {
-    const v11 = localStorage.getItem(TX_KEY_V11)
-    if (v11) {
-      const parsed = JSON.parse(v11) as Transaction[]
-      if (Array.isArray(parsed)) {
-        return persistMigrated(
-          parsed.map((tx) => normalizeTransaction(reinterpretAsNetBase(tx))),
-        )
-      }
+  // Recalcular: IVA = % del importe total (no ÷ 1,15 ni suma sobre base).
+  for (const key of TX_KEY_LEGACY) {
+    try {
+      const legacy = localStorage.getItem(key)
+      if (!legacy) continue
+      const parsed = JSON.parse(legacy) as Transaction[]
+      if (!Array.isArray(parsed)) continue
+      return persistMigrated(
+        parsed.map((tx) =>
+          normalizeTransaction(reinterpretAsVatFromTotal(tx)),
+        ),
+      )
+    } catch {
+      /* try next */
     }
-  } catch {
-    /* ignore */
-  }
-
-  try {
-    const v10 = localStorage.getItem(TX_KEY_V10)
-    if (v10) {
-      const parsed = JSON.parse(v10) as Transaction[]
-      if (Array.isArray(parsed)) {
-        return persistMigrated(parsed.map(normalizeTransaction))
-      }
-    }
-  } catch {
-    /* ignore */
   }
 
   // Solo Quirón; sin clínica ni cataratas de demo.
-  return SEED_TRANSACTIONS.map(normalizeTransaction)
+  return SEED_TRANSACTIONS.map((tx) =>
+    normalizeTransaction(reinterpretAsVatFromTotal(tx)),
+  )
 }
 
 function loadInventory(): { products: AestheticProduct[]; sales: ProductSale[] } {
@@ -304,12 +299,12 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
         const incomeBreakdown = resolveVatAmounts({
           amount: revenue,
           vatRate: defaultVatRateFor('ingreso'),
-          amountIncludesVat: false,
+          amountIncludesVat: true,
         })
         const expenseBreakdown = resolveVatAmounts({
           amount: cogs,
           vatRate: defaultVatRateFor('gasto'),
-          amountIncludesVat: false,
+          amountIncludesVat: true,
         })
         const income: Transaction = normalizeVatTransaction({
           id: incomeTransactionId,
@@ -318,7 +313,7 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
           specialtyId: 'estetica' as const,
           amount: incomeBreakdown.netAmount,
           ...incomeBreakdown,
-          amountIncludesVat: false,
+          amountIncludesVat: true,
           date: input.date,
           description: `Venta producto: ${product.name} × ${input.quantity}`,
           createdAt: now,
@@ -330,7 +325,7 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
           specialtyId: 'estetica' as const,
           amount: expenseBreakdown.netAmount,
           ...expenseBreakdown,
-          amountIncludesVat: false,
+          amountIncludesVat: true,
           vatDeductible: true,
           vatDeductibleShare: 1,
           date: input.date,

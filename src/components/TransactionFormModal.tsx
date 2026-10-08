@@ -46,8 +46,8 @@ export function TransactionFormModal({
     defaultSpecialtyId,
   )
   const [amount, setAmount] = useState('')
-  /** Por defecto el importe es la base: IVA = importe × %. */
-  const [amountIncludesVat, setAmountIncludesVat] = useState(false)
+  /** Por defecto el importe es el total: IVA = total × %. */
+  const [amountIncludesVat, setAmountIncludesVat] = useState(true)
   const [vatExempt, setVatExempt] = useState(false)
   const [vatRateInput, setVatRateInput] = useState(() =>
     rateToInput(defaultVatRateFor(typeProp)),
@@ -87,13 +87,13 @@ export function TransactionFormModal({
       setType(transaction.type)
       setAreaId(transaction.areaId)
       setSpecialtyId(transaction.specialtyId ?? '')
-      const includes = transaction.amountIncludesVat === true
-      setAmountIncludesVat(includes)
+      // Edición sobre el total (IVA = % del total)
+      setAmountIncludesVat(true)
       setAmount(
         String(
-          includes
-            ? (transaction.grossAmount ?? transaction.amount)
-            : (transaction.netAmount ?? transaction.amount),
+          transaction.grossAmount ??
+            transaction.netAmount ??
+            transaction.amount,
         ),
       )
       const exempt = Boolean(transaction.vatExempt) || transaction.vatRate === 0
@@ -122,7 +122,7 @@ export function TransactionFormModal({
       areaNeedsSpecialty(defaultAreaId) ? defaultSpecialtyId : '',
     )
     setAmount('')
-    setAmountIncludesVat(false)
+    setAmountIncludesVat(true)
     setVatExempt(false)
     setVatRateInput(rateToInput(defaultVatRateFor(typeProp)))
     setVatDeductible(true)
@@ -370,9 +370,7 @@ export function TransactionFormModal({
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
-              <Label htmlFor="amount">
-                {amountIncludesVat ? 'Importe total (€)' : 'Importe (€)'}
-              </Label>
+              <Label htmlFor="amount">Importe total (€)</Label>
               <Input
                 id="amount"
                 type="number"
@@ -384,13 +382,9 @@ export function TransactionFormModal({
                 required
               />
               <p className="mt-1.5 text-[11px] text-ink-muted">
-                {amountIncludesVat
-                  ? type === 'ingreso'
-                    ? 'Se desglosa el IVA incluido (base = total ÷ 1,15).'
-                    : 'Se desglosa el IVA incluido (base = total ÷ 1,21).'
-                  : type === 'ingreso'
-                    ? 'IVA = 15 % de este importe · Total = importe + IVA.'
-                    : 'IVA = 21 % de este importe · Total = importe + IVA.'}
+                {type === 'ingreso'
+                  ? 'IVA = 15 % del total · Base = total − IVA.'
+                  : 'IVA = 21 % del total · Base = total − IVA.'}
               </p>
             </div>
             <div>
@@ -410,19 +404,9 @@ export function TransactionFormModal({
               Desglose IVA
             </p>
             <p className="text-[11px] leading-relaxed text-ink-muted">
-              Ingresos 15 % · Gastos 21 % sobre el importe. Tipos provisionales,
-              configurables y pendientes de validación fiscal.
+              El IVA es el 15 % (ingresos) o 21 % (gastos) del importe total.
+              Tipos provisionales, modificables abajo.
             </p>
-
-            <label className="flex cursor-pointer items-start gap-2.5 text-sm text-ink">
-              <input
-                type="checkbox"
-                className="mt-0.5 accent-ink"
-                checked={amountIncludesVat}
-                onChange={(e) => setAmountIncludesVat(e.target.checked)}
-              />
-              <span>El importe ya incluye IVA (desglosar en lugar de sumar)</span>
-            </label>
 
             <label className="flex cursor-pointer items-start gap-2.5 text-sm text-ink">
               <input
@@ -463,10 +447,10 @@ export function TransactionFormModal({
 
             <dl className="space-y-1.5 border-t border-sand/70 pt-3 text-sm">
               <div className="flex items-center justify-between gap-4">
-                <dt className="text-ink-soft">Base (sin IVA)</dt>
-                <dd className="tabular-nums text-ink">
+                <dt className="font-medium text-ink">Total</dt>
+                <dd className="font-medium tabular-nums text-ink">
                   {vatBreakdown
-                    ? formatCurrencyPrecise(vatBreakdown.netAmount)
+                    ? formatCurrencyPrecise(vatBreakdown.grossAmount)
                     : '—'}
                 </dd>
               </div>
@@ -493,11 +477,11 @@ export function TransactionFormModal({
                   </dd>
                 </div>
               )}
-              <div className="flex items-center justify-between gap-4 border-t border-sand/70 pt-1.5">
-                <dt className="font-medium text-ink">Total</dt>
-                <dd className="font-medium tabular-nums text-ink">
+              <div className="flex items-center justify-between gap-4">
+                <dt className="text-ink-soft">Base (sin IVA)</dt>
+                <dd className="tabular-nums text-ink">
                   {vatBreakdown
-                    ? formatCurrencyPrecise(vatBreakdown.grossAmount)
+                    ? formatCurrencyPrecise(vatBreakdown.netAmount)
                     : '—'}
                 </dd>
               </div>

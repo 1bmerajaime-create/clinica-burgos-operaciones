@@ -43,8 +43,8 @@ export interface Transaction {
   /** Operación exenta de IVA */
   vatExempt?: boolean
   /**
-   * true: el importe introducido es el total (incluye IVA) → se desglosa.
-   * false/undefined: el importe es la base → IVA = importe × tipo.
+   * true/undefined: el importe es el total → IVA = total × tipo.
+   * false: el importe es la base → IVA = base × tipo y se suma al total.
    */
   amountIncludesVat?: boolean
   /**
