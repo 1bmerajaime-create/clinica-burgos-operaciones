@@ -14,7 +14,7 @@ import type {
   Transaction,
   TransactionType,
 } from '../types'
-import { Button, Dialog, Input, Label, Select, Textarea } from './ui'
+import { Button, Dialog, Input, Label, Select } from './ui'
 
 interface Props {
   open: boolean
@@ -158,9 +158,13 @@ export function TransactionFormModal({
     }
   }
 
+  function conceptFromFileName(name: string) {
+    return name.replace(/\.[^.]+$/, '').trim() || name
+  }
+
   async function handleFile(file: File) {
     setFileName(file.name)
-    if (!description) setDescription(`Factura: ${file.name}`)
+    setDescription(conceptFromFileName(file.name))
 
     const isImage = file.type.startsWith('image/')
     const isPdf =
@@ -184,12 +188,12 @@ export function TransactionFormModal({
         setAmountIncludesVat(true)
       }
       if (result.date) setDate(result.date)
-      if (result.description) setDescription(result.description)
+      // El concepto se toma del nombre del archivo (no lo sobrescribe el OCR)
 
       const filled = [
         result.amount != null ? 'importe' : null,
         result.date ? 'fecha' : null,
-        result.description ? 'concepto' : null,
+        'concepto',
       ].filter(Boolean)
 
       const preview = result.rawText
@@ -295,8 +299,8 @@ export function TransactionFormModal({
                 {fileName || 'Adjuntar factura (JPG / PNG / PDF)'}
               </span>
               <span className="mt-1.5 text-xs text-ink-muted">
-                Si subes un documento, intentamos rellenar importe, fecha y
-                concepto
+                El concepto se rellena con el nombre del archivo; también
+                intentamos leer importe y fecha
               </span>
               <input
                 id="invoice-file"
@@ -328,6 +332,17 @@ export function TransactionFormModal({
                 {scanNote && <p>{scanNote}</p>}
               </div>
             )}
+          </div>
+
+          <div>
+            <Label htmlFor="description">Concepto</Label>
+            <Input
+              id="description"
+              placeholder="Se rellena con el nombre del archivo"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              required
+            />
           </div>
 
           <div className={needsSpecialty ? 'grid gap-4 sm:grid-cols-2' : ''}>
@@ -486,21 +501,6 @@ export function TransactionFormModal({
                 </dd>
               </div>
             </dl>
-          </div>
-
-          <div>
-            <Label htmlFor="description">Concepto</Label>
-            <Textarea
-              id="description"
-              placeholder={
-                type === 'ingreso'
-                  ? 'Ej. Consultas oftalmológicas semana 1'
-                  : 'Ej. Material quirúrgico proveedor X'
-              }
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              required
-            />
           </div>
 
           <div className="flex justify-end gap-2 pt-2">
