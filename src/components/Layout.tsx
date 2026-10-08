@@ -1,6 +1,7 @@
 import { NavLink, Outlet } from 'react-router-dom'
 import { CalendarRange, LogOut } from 'lucide-react'
 import { useState } from 'react'
+import { useFinance } from '../context/FinanceContext'
 import { usePeriodFilter } from '../context/PeriodFilterContext'
 import { logout } from '../lib/auth'
 import { PeriodFilterModal } from './PeriodFilterModal'
@@ -12,10 +13,11 @@ interface Props {
 
 export function Layout({ onLogout }: Props) {
   const { summary } = usePeriodFilter()
+  const { cloudEnabled, syncError } = useFinance()
   const [filtersOpen, setFiltersOpen] = useState(false)
 
-  function handleLogout() {
-    logout()
+  async function handleLogout() {
+    await logout()
     onLogout()
   }
 
@@ -45,7 +47,7 @@ export function Layout({ onLogout }: Props) {
             <Button
               variant="ghost"
               className="!px-2.5 sm:!px-3"
-              onClick={handleLogout}
+              onClick={() => void handleLogout()}
               title="Salir de la sesión"
             >
               <LogOut size={14} />
@@ -56,6 +58,12 @@ export function Layout({ onLogout }: Props) {
       </header>
 
       <main className="mx-auto max-w-7xl px-4 py-6 sm:px-5 sm:py-8 md:px-8 md:py-10">
+        {cloudEnabled && syncError && (
+          <div className="mb-5 rounded-2xl border border-rose/25 bg-rose/5 px-4 py-3 text-[12px] leading-relaxed text-rose">
+            <p className="font-medium">Sincronización en la nube no disponible</p>
+            <p className="mt-1 text-rose/90">{syncError}</p>
+          </div>
+        )}
         <Outlet />
       </main>
 

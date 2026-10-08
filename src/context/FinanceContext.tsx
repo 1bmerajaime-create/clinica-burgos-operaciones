@@ -2,6 +2,7 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useState,
   type ReactNode,
@@ -11,14 +12,32 @@ import {
   SEED_PRODUCT_SALES,
   SEED_TRANSACTIONS,
 } from '../data/seed'
+import { applyBackupPayload, type BackupPayload } from '../lib/backupArchive'
+import {
+  deleteInvoiceCloud,
+  deleteTransactionCloud,
+  getLastSyncedAt,
+  hydrateFromCloud,
+  pullMissingInvoices,
+  pushAllToCloud,
+  pushInvoiceToCloud,
+  setLastSyncedAt,
+  upsertInventoryCloud,
+  upsertTransactionCloud,
+} from '../lib/cloudSync'
 import {
   deleteInvoiceFile,
+  getInvoiceFile,
   saveInvoiceFile,
 } from '../lib/invoiceStore'
+import { isCloudConfigured } from '../lib/firebase'
 import {
   defaultVatRateFor,
+  defaultVatSettings,
+  migrateHospitalVatToIrpf,
   normalizeVatTransaction,
   reinterpretAsVatFromTotal,
+  resolveIrpfAmount,
   resolveVatAmounts,
 } from '../lib/vat'
 import type {
@@ -43,6 +62,8 @@ export interface NewTransactionInput {
   amountIncludesVat?: boolean
   vatDeductible?: boolean
   vatDeductibleShare?: number
+  irpfRate?: number
+  irpfAmount?: number
   date: string
   description: string
   invoiceFileName?: string
@@ -65,6 +86,16 @@ function withVatFields(input: NewTransactionInput): NewTransactionInput {
     vatRate,
     amountIncludesVat,
   })
+  const irpfRate =
+    input.irpfRate != null && input.irpfRate > 0 ? input.irpfRate : undefined
+  const irpfAmount =
+    irpfRate != null
+      ? (input.irpfAmount ??
+        resolveIrpfAmount({
+          baseAmount: breakdown.netAmount,
+          irpfRate,
+        }))
+      : input.irpfAmount
   return normalizeVatTransaction({
     ...input,
     ...breakdown,
@@ -72,11 +103,13 @@ function withVatFields(input: NewTransactionInput): NewTransactionInput {
     vatRate,
     vatExempt: exempt,
     amountIncludesVat,
+    irpfRate,
+    irpfAmount,
   })
 }
 
 function normalizeTransaction(tx: Transaction): Transaction {
-  return normalizeVatTransaction(tx)
+  return normalizeVatTransaction(migrateHospitalVatToIrpf(tx))
 }
 
 export interface NewProductInput {
@@ -98,6 +131,10 @@ export interface NewSaleInput {
 }
 
 interface FinanceContextValue {
+  ready: boolean
+  cloudEnabled: boolean
+  lastSyncedAt: string | null
+  syncError: string | null
   transactions: Transaction[]
   products: AestheticProduct[]
   productSales: ProductSale[]
@@ -109,23 +146,40 @@ interface FinanceContextValue {
   removeProduct: (id: string) => void
   restockProduct: (id: string, quantity: number, unitCost?: number) => void
   sellProduct: (input: NewSaleInput) => void
+  replaceAllData: (payload: BackupPayload) => Promise<void>
+  syncNow: () => Promise<void>
 }
 
 const FinanceContext = createContext<FinanceContextValue | null>(null)
 
-const TX_KEY = 'cb-operaciones-transactions-v15'
-const TX_KEY_LEGACY = [
-  'cb-operaciones-transactions-v14',
-  'cb-operaciones-transactions-v13',
-  'cb-operaciones-transactions-v12',
-  'cb-operaciones-transactions-v11',
-  'cb-operaciones-transactions-v10',
-] as const
+const TX_KEY = 'cb-operaciones-transactions-v16'
+const TX_KEY_PREFIX = 'cb-operaciones-transactions-v'
 const INV_KEY = 'cb-operaciones-inventory-v4'
 
 function persistMigrated(txs: Transaction[]): Transaction[] {
   localStorage.setItem(TX_KEY, JSON.stringify(txs))
   return txs
+}
+
+/** Busca la clave local más reciente (incl. v4…v15) para no perder datos. */
+function findLegacyTransactionKey(): string | null {
+  try {
+    let bestKey: string | null = null
+    let bestVer = -1
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i)
+      if (!key || !key.startsWith(TX_KEY_PREFIX) || key === TX_KEY) continue
+      const ver = Number(key.slice(TX_KEY_PREFIX.length))
+      if (!Number.isFinite(ver)) continue
+      if (ver > bestVer) {
+        bestVer = ver
+        bestKey = key
+      }
+    }
+    return bestKey
+  } catch {
+    return null
+  }
 }
 
 function loadTransactions(): Transaction[] {
@@ -139,24 +193,25 @@ function loadTransactions(): Transaction[] {
     /* ignore */
   }
 
-  // Recalcular desglose: total conservado; IVA = total × tipo.
-  for (const key of TX_KEY_LEGACY) {
+  const legacyKey = findLegacyTransactionKey()
+  if (legacyKey) {
     try {
-      const legacy = localStorage.getItem(key)
-      if (!legacy) continue
-      const parsed = JSON.parse(legacy) as Transaction[]
-      if (!Array.isArray(parsed)) continue
-      return persistMigrated(
-        parsed.map((tx) =>
-          normalizeTransaction(reinterpretAsVatFromTotal(tx)),
-        ),
-      )
+      const legacy = localStorage.getItem(legacyKey)
+      if (legacy) {
+        const parsed = JSON.parse(legacy) as Transaction[]
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return persistMigrated(
+            parsed.map((tx) =>
+              normalizeTransaction(reinterpretAsVatFromTotal(tx)),
+            ),
+          )
+        }
+      }
     } catch {
-      /* try next */
+      /* fall through */
     }
   }
 
-  // Solo Quirón; sin clínica ni cataratas de demo.
   return SEED_TRANSACTIONS.map((tx) =>
     normalizeTransaction(reinterpretAsVatFromTotal(tx)),
   )
@@ -187,11 +242,29 @@ function uid(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
 }
 
+function touch(tx: Transaction): Transaction {
+  return { ...tx, updatedAt: new Date().toISOString() }
+}
+
+async function cloudQuiet(fn: () => Promise<void>) {
+  try {
+    await fn()
+    setLastSyncedAt()
+  } catch (err) {
+    console.warn('[cloud]', err)
+    throw err
+  }
+}
+
 export function FinanceProvider({ children }: { children: ReactNode }) {
   const initialInv = loadInventory()
   const [transactions, setTransactions] = useState<Transaction[]>(loadTransactions)
   const [products, setProducts] = useState<AestheticProduct[]>(initialInv.products)
   const [productSales, setProductSales] = useState<ProductSale[]>(initialInv.sales)
+  const [ready, setReady] = useState(!isCloudConfigured())
+  const [lastSyncedAt, setLastSynced] = useState<string | null>(getLastSyncedAt)
+  const [syncError, setSyncError] = useState<string | null>(null)
+  const cloudEnabled = isCloudConfigured()
 
   const persistTx = useCallback((next: Transaction[]) => {
     setTransactions(next)
@@ -210,20 +283,109 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
     [],
   )
 
+  useEffect(() => {
+    if (!cloudEnabled) return
+    let cancelled = false
+
+    ;(async () => {
+      try {
+        const localInv = loadInventory()
+        const hydrated = await hydrateFromCloud({
+          transactions: loadTransactions(),
+          products: localInv.products,
+          productSales: localInv.sales,
+        })
+        if (cancelled) return
+        if (
+          hydrated.source === 'cloud' ||
+          hydrated.source === 'merged' ||
+          hydrated.source === 'local'
+        ) {
+          const txs = hydrated.transactions.map(normalizeTransaction)
+          persistTx(txs)
+          persistInv(hydrated.products, hydrated.productSales)
+          void pullMissingInvoices(txs).catch(() => {
+            /* no bloquear */
+          })
+        }
+        const at = new Date().toISOString()
+        setLastSyncedAt(at)
+        setLastSynced(at)
+        setSyncError(null)
+      } catch (err) {
+        if (!cancelled) {
+          setSyncError(
+            err instanceof Error ? err.message : 'Error al sincronizar',
+          )
+        }
+      } finally {
+        if (!cancelled) setReady(true)
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [cloudEnabled, persistInv, persistTx])
+
+  const syncNow = useCallback(async () => {
+    if (!cloudEnabled) return
+    setSyncError(null)
+    try {
+      await pushAllToCloud({ transactions, products, productSales })
+      const at = new Date().toISOString()
+      setLastSyncedAt(at)
+      setLastSynced(at)
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : 'Error al sincronizar'
+      setSyncError(message)
+      throw err
+    }
+  }, [cloudEnabled, products, productSales, transactions])
+
+  const replaceAllData = useCallback(
+    async (payload: BackupPayload) => {
+      await applyBackupPayload(payload)
+      const txs = payload.transactions.map(normalizeTransaction)
+      persistTx(txs)
+      persistInv(payload.products, payload.productSales)
+      if (cloudEnabled) {
+        try {
+          await pushAllToCloud({
+            transactions: txs,
+            products: payload.products,
+            productSales: payload.productSales,
+          })
+          const at = new Date().toISOString()
+          setLastSyncedAt(at)
+          setLastSynced(at)
+          setSyncError(null)
+        } catch (err) {
+          setSyncError(
+            err instanceof Error ? err.message : 'Error al subir a la nube',
+          )
+        }
+      }
+    },
+    [cloudEnabled, persistInv, persistTx],
+  )
+
   const addTransaction = useCallback(
     async (input: NewTransactionInput) => {
       const { invoiceFile, clearInvoice: _clear, ...rest } = input
       const id = uid('tx')
       const fields = withVatFields(rest)
-      const tx: Transaction = {
+      const now = new Date().toISOString()
+      const tx: Transaction = touch({
         id,
         ...fields,
         invoiceFileName: fields.invoiceFileName,
         invoiceMimeType:
           fields.invoiceMimeType ||
           (invoiceFile ? invoiceFile.type || undefined : undefined),
-        createdAt: new Date().toISOString(),
-      }
+        createdAt: now,
+      })
       if (invoiceFile && tx.invoiceFileName) {
         await saveInvoiceFile(
           id,
@@ -232,9 +394,27 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
           tx.invoiceMimeType,
         )
       }
-      persistTx([tx, ...transactions])
+      const next = [tx, ...transactions]
+      persistTx(next)
+      if (cloudEnabled) {
+        try {
+          await cloudQuiet(async () => {
+            await upsertTransactionCloud(tx)
+            if (invoiceFile && tx.invoiceFileName) {
+              const stored = await getInvoiceFile(id)
+              if (stored) await pushInvoiceToCloud(stored)
+            }
+          })
+          setLastSynced(getLastSyncedAt())
+          setSyncError(null)
+        } catch (err) {
+          setSyncError(
+            err instanceof Error ? err.message : 'Error al sincronizar',
+          )
+        }
+      }
     },
-    [persistTx, transactions],
+    [cloudEnabled, persistTx, transactions],
   )
 
   const updateTransaction = useCallback(
@@ -245,6 +425,13 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
 
       if (clearInvoice) {
         await deleteInvoiceFile(id)
+        if (cloudEnabled) {
+          try {
+            await deleteInvoiceCloud(id, prev?.invoiceFileName)
+          } catch {
+            /* local already cleared */
+          }
+        }
         fields.invoiceFileName = undefined
         fields.invoiceMimeType = undefined
       } else if (invoiceFile && fields.invoiceFileName) {
@@ -263,19 +450,70 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
           fields.invoiceMimeType ?? prev?.invoiceMimeType
       }
 
-      persistTx(
-        transactions.map((t) => (t.id === id ? { ...t, ...fields } : t)),
-      )
+      if (!prev) return
+      const updated = touch({ ...prev, ...fields, id })
+      const next = transactions.map((t) => (t.id === id ? updated : t))
+      persistTx(next)
+
+      if (cloudEnabled) {
+        try {
+          await cloudQuiet(async () => {
+            await upsertTransactionCloud(updated)
+            if (invoiceFile && updated.invoiceFileName) {
+              const stored = await getInvoiceFile(id)
+              if (stored) await pushInvoiceToCloud(stored)
+            }
+          })
+          setLastSynced(getLastSyncedAt())
+          setSyncError(null)
+        } catch (err) {
+          setSyncError(
+            err instanceof Error ? err.message : 'Error al sincronizar',
+          )
+        }
+      }
     },
-    [persistTx, transactions],
+    [cloudEnabled, persistTx, transactions],
   )
 
   const removeTransaction = useCallback(
     async (id: string) => {
+      const prev = transactions.find((t) => t.id === id)
       await deleteInvoiceFile(id)
       persistTx(transactions.filter((t) => t.id !== id))
+      if (cloudEnabled) {
+        try {
+          await cloudQuiet(async () => {
+            await deleteTransactionCloud(id)
+            await deleteInvoiceCloud(id, prev?.invoiceFileName)
+          })
+          setLastSynced(getLastSyncedAt())
+          setSyncError(null)
+        } catch (err) {
+          setSyncError(
+            err instanceof Error ? err.message : 'Error al sincronizar',
+          )
+        }
+      }
     },
-    [persistTx, transactions],
+    [cloudEnabled, persistTx, transactions],
+  )
+
+  const pushInvCloud = useCallback(
+    (nextProducts: AestheticProduct[], nextSales: ProductSale[]) => {
+      if (!cloudEnabled) return
+      void cloudQuiet(() => upsertInventoryCloud(nextProducts, nextSales))
+        .then(() => {
+          setLastSynced(getLastSyncedAt())
+          setSyncError(null)
+        })
+        .catch((err) => {
+          setSyncError(
+            err instanceof Error ? err.message : 'Error al sincronizar',
+          )
+        })
+    },
+    [cloudEnabled],
   )
 
   const addProduct = useCallback(
@@ -285,47 +523,49 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
         ...input,
         createdAt: new Date().toISOString(),
       }
-      persistInv([product, ...products], productSales)
+      const nextProducts = [product, ...products]
+      persistInv(nextProducts, productSales)
+      pushInvCloud(nextProducts, productSales)
     },
-    [persistInv, products, productSales],
+    [persistInv, products, productSales, pushInvCloud],
   )
 
   const updateProduct = useCallback(
     (id: string, input: NewProductInput) => {
-      persistInv(
-        products.map((p) => (p.id === id ? { ...p, ...input } : p)),
-        productSales,
+      const nextProducts = products.map((p) =>
+        p.id === id ? { ...p, ...input } : p,
       )
+      persistInv(nextProducts, productSales)
+      pushInvCloud(nextProducts, productSales)
     },
-    [persistInv, products, productSales],
+    [persistInv, products, productSales, pushInvCloud],
   )
 
   const removeProduct = useCallback(
     (id: string) => {
-      persistInv(
-        products.filter((p) => p.id !== id),
-        productSales.filter((s) => s.productId !== id),
-      )
+      const nextProducts = products.filter((p) => p.id !== id)
+      const nextSales = productSales.filter((s) => s.productId !== id)
+      persistInv(nextProducts, nextSales)
+      pushInvCloud(nextProducts, nextSales)
     },
-    [persistInv, products, productSales],
+    [persistInv, products, productSales, pushInvCloud],
   )
 
   const restockProduct = useCallback(
     (id: string, quantity: number, unitCost?: number) => {
       if (quantity <= 0) return
-      persistInv(
-        products.map((p) => {
-          if (p.id !== id) return p
-          return {
-            ...p,
-            stock: p.stock + quantity,
-            unitCost: unitCost ?? p.unitCost,
-          }
-        }),
-        productSales,
-      )
+      const nextProducts = products.map((p) => {
+        if (p.id !== id) return p
+        return {
+          ...p,
+          stock: p.stock + quantity,
+          unitCost: unitCost ?? p.unitCost,
+        }
+      })
+      persistInv(nextProducts, productSales)
+      pushInvCloud(nextProducts, productSales)
     },
-    [persistInv, products, productSales],
+    [persistInv, products, productSales, pushInvCloud],
   )
 
   const sellProduct = useCallback(
@@ -346,9 +586,14 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
       if (register) {
         incomeTransactionId = uid('tx')
         expenseTransactionId = uid('tx')
+        const incomeVat = defaultVatSettings({
+          type: 'ingreso',
+          areaId: product.areaId,
+          specialtyId: 'estetica',
+        })
         const incomeBreakdown = resolveVatAmounts({
           amount: revenue,
-          vatRate: defaultVatRateFor('ingreso'),
+          vatRate: incomeVat.vatExempt ? 0 : incomeVat.vatRate,
           amountIncludesVat: true,
         })
         const expenseBreakdown = resolveVatAmounts({
@@ -356,34 +601,54 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
           vatRate: defaultVatRateFor('gasto'),
           amountIncludesVat: true,
         })
-        const income: Transaction = normalizeVatTransaction({
-          id: incomeTransactionId,
-          type: 'ingreso',
-          areaId: product.areaId,
-          specialtyId: 'estetica' as const,
-          amount: incomeBreakdown.netAmount,
-          ...incomeBreakdown,
-          amountIncludesVat: true,
-          date: input.date,
-          description: `Venta producto: ${product.name} × ${input.quantity}`,
-          createdAt: now,
-        })
-        const expense: Transaction = normalizeVatTransaction({
-          id: expenseTransactionId,
-          type: 'gasto',
-          areaId: product.areaId,
-          specialtyId: 'estetica' as const,
-          amount: expenseBreakdown.netAmount,
-          ...expenseBreakdown,
-          amountIncludesVat: true,
-          vatDeductible: true,
-          vatDeductibleShare: 1,
-          date: input.date,
-          description: `Coste producto: ${product.name} × ${input.quantity}`,
-          createdAt: now,
-        })
+        const income: Transaction = touch(
+          normalizeVatTransaction({
+            id: incomeTransactionId,
+            type: 'ingreso',
+            areaId: product.areaId,
+            specialtyId: 'estetica' as const,
+            amount: incomeBreakdown.netAmount,
+            ...incomeBreakdown,
+            vatExempt: incomeVat.vatExempt,
+            amountIncludesVat: true,
+            date: input.date,
+            description: `Venta producto: ${product.name} × ${input.quantity}`,
+            createdAt: now,
+          }),
+        )
+        const expense: Transaction = touch(
+          normalizeVatTransaction({
+            id: expenseTransactionId,
+            type: 'gasto',
+            areaId: product.areaId,
+            specialtyId: 'estetica' as const,
+            amount: expenseBreakdown.netAmount,
+            ...expenseBreakdown,
+            amountIncludesVat: true,
+            vatDeductible: true,
+            vatDeductibleShare: 1,
+            date: input.date,
+            description: `Coste producto: ${product.name} × ${input.quantity}`,
+            createdAt: now,
+          }),
+        )
         nextTx = [income, expense, ...transactions]
         persistTx(nextTx)
+        if (cloudEnabled) {
+          void cloudQuiet(async () => {
+            await upsertTransactionCloud(income)
+            await upsertTransactionCloud(expense)
+          })
+            .then(() => {
+              setLastSynced(getLastSyncedAt())
+              setSyncError(null)
+            })
+            .catch((err) => {
+              setSyncError(
+                err instanceof Error ? err.message : 'Error al sincronizar',
+              )
+            })
+        }
       }
 
       const sale: ProductSale = {
@@ -400,18 +665,30 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
         createdAt: now,
       }
 
-      persistInv(
-        products.map((p) =>
-          p.id === product.id ? { ...p, stock: p.stock - input.quantity } : p,
-        ),
-        [sale, ...productSales],
+      const nextProducts = products.map((p) =>
+        p.id === product.id ? { ...p, stock: p.stock - input.quantity } : p,
       )
+      const nextSales = [sale, ...productSales]
+      persistInv(nextProducts, nextSales)
+      pushInvCloud(nextProducts, nextSales)
     },
-    [persistInv, persistTx, productSales, products, transactions],
+    [
+      cloudEnabled,
+      persistInv,
+      persistTx,
+      productSales,
+      products,
+      pushInvCloud,
+      transactions,
+    ],
   )
 
   const value = useMemo(
     () => ({
+      ready,
+      cloudEnabled,
+      lastSyncedAt,
+      syncError,
       transactions,
       products,
       productSales,
@@ -423,8 +700,14 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
       removeProduct,
       restockProduct,
       sellProduct,
+      replaceAllData,
+      syncNow,
     }),
     [
+      ready,
+      cloudEnabled,
+      lastSyncedAt,
+      syncError,
       transactions,
       products,
       productSales,
@@ -436,8 +719,18 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
       removeProduct,
       restockProduct,
       sellProduct,
+      replaceAllData,
+      syncNow,
     ],
   )
+
+  if (!ready) {
+    return (
+      <div className="flex min-h-[40vh] items-center justify-center text-sm text-ink-muted">
+        Sincronizando datos…
+      </div>
+    )
+  }
 
   return (
     <FinanceContext.Provider value={value}>{children}</FinanceContext.Provider>

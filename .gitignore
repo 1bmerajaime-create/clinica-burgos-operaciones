@@ -11,6 +11,9 @@ node_modules
 dist
 dist-ssr
 *.local
+.env
+.env.local
+.env.*.local
 
 # Editor directories and files
 .vscode/*
@@ -28,3 +31,7 @@ public/sync-published.json
 public/sync-import.html
 .sync-inject.js
 .sync-parts/
+cb-movimientos*.json
+public/cb-facturas-*.zip
+public/import-invoices.html
+

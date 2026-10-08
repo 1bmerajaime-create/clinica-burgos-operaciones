@@ -59,6 +59,35 @@ export async function getInvoiceFile(
   return result
 }
 
+export async function listInvoiceFiles(): Promise<StoredInvoice[]> {
+  const db = await openDb()
+  const result = await new Promise<StoredInvoice[]>((resolve, reject) => {
+    const tx = db.transaction(STORE, 'readonly')
+    const req = tx.objectStore(STORE).getAll()
+    req.onsuccess = () => resolve((req.result as StoredInvoice[]) ?? [])
+    req.onerror = () => reject(req.error ?? new Error('Invoice list failed'))
+  })
+  db.close()
+  return result
+}
+
+export async function replaceAllInvoiceFiles(
+  records: StoredInvoice[],
+): Promise<void> {
+  const db = await openDb()
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction(STORE, 'readwrite')
+    const store = tx.objectStore(STORE)
+    store.clear()
+    for (const record of records) {
+      store.put(record)
+    }
+    tx.oncomplete = () => resolve()
+    tx.onerror = () => reject(tx.error ?? new Error('Invoice replace failed'))
+  })
+  db.close()
+}
+
 export async function deleteInvoiceFile(transactionId: string): Promise<void> {
   const db = await openDb()
   await new Promise<void>((resolve, reject) => {

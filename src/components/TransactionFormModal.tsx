@@ -9,9 +9,11 @@ import {
   getInvoiceFile,
 } from '../lib/invoiceStore'
 import {
+  defaultIrpfSettings,
   defaultVatRateFor,
   defaultVatSettings,
   formatVatPercent,
+  resolveIrpfAmount,
   resolveVatAmounts,
 } from '../lib/vat'
 import type {
@@ -61,6 +63,7 @@ export function TransactionFormModal({
     rateToInput(defaultVatRateFor(typeProp)),
   )
   const [vatDeductible, setVatDeductible] = useState(true)
+  const [irpfRateInput, setIrpfRateInput] = useState('0')
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [description, setDescription] = useState('')
   const [fileName, setFileName] = useState('')
@@ -104,6 +107,22 @@ export function TransactionFormModal({
     })
   }, [amount, parsedRate, amountIncludesVat])
 
+  const parsedIrpfRate = useMemo(() => {
+    const n = Number(irpfRateInput.replace(',', '.'))
+    if (!Number.isFinite(n) || n < 0) return 0
+    return n / 100
+  }, [irpfRateInput])
+
+  const irpfAmount = useMemo(() => {
+    if (!vatBreakdown || parsedIrpfRate <= 0) return 0
+    return resolveIrpfAmount({
+      baseAmount: vatBreakdown.netAmount,
+      irpfRate: parsedIrpfRate,
+    })
+  }, [vatBreakdown, parsedIrpfRate])
+
+  const showIrpf = revenueSide && areaId === 'quiron'
+
   function applyVatDefaults(
     nextType: TransactionType,
     nextArea: AreaId,
@@ -115,7 +134,9 @@ export function TransactionFormModal({
       specialtyId: nextSpecialty,
     })
     setVatExempt(defaults.vatExempt)
-    setVatRateInput(rateToInput(defaults.vatRate))
+    setVatRateInput(rateToInput(defaults.vatRate || defaultVatRateFor(nextType)))
+    const irpf = defaultIrpfSettings({ type: nextType, areaId: nextArea })
+    setIrpfRateInput(rateToInput(irpf.irpfRate))
   }
 
   useEffect(() => {
@@ -153,6 +174,18 @@ export function TransactionFormModal({
         ),
       )
       setVatDeductible(transaction.vatDeductible !== false)
+      setIrpfRateInput(
+        rateToInput(
+          transaction.irpfRate ??
+            (transaction.areaId === 'quiron' &&
+            isRevenueSide(transaction.type)
+              ? defaultIrpfSettings({
+                  type: transaction.type,
+                  areaId: transaction.areaId,
+                }).irpfRate
+              : 0),
+        ),
+      )
       setDate(transaction.date)
       setDescription(transaction.description)
       setFileName(transaction.invoiceFileName ?? '')
@@ -209,7 +242,22 @@ export function TransactionFormModal({
     setAreaId(next)
     const nextSpecialty = (specialtyId || 'oftalmologia') as SpecialtyId
     if (!specialtyId) setSpecialtyId('oftalmologia')
-    if (!isEditing) applyVatDefaults(type, next, nextSpecialty)
+    if (!isEditing) {
+      applyVatDefaults(type, next, nextSpecialty)
+      return
+    }
+    // Al pasar a/desde hospital en edición, alinear IRPF por defecto.
+    const irpf = defaultIrpfSettings({ type, areaId: next })
+    setIrpfRateInput(rateToInput(irpf.irpfRate))
+    if (next === 'quiron' && isRevenueSide(type)) {
+      const vat = defaultVatSettings({
+        type,
+        areaId: next,
+        specialtyId: nextSpecialty,
+      })
+      setVatExempt(vat.vatExempt)
+      if (vat.vatExempt) setVatRateInput(rateToInput(defaultVatRateFor(type)))
+    }
   }
 
   function handleSpecialtyChange(next: SpecialtyId | '') {
@@ -340,6 +388,8 @@ export function TransactionFormModal({
             ? 1
             : 0
           : undefined,
+      irpfRate: showIrpf && parsedIrpfRate > 0 ? parsedIrpfRate : undefined,
+      irpfAmount: showIrpf && irpfAmount > 0 ? irpfAmount : undefined,
       date,
       description: description.trim(),
       invoiceFileName: clearInvoice
@@ -563,8 +613,8 @@ export function TransactionFormModal({
             </p>
             <p className="text-[11px] leading-relaxed text-ink-muted">
               El importe es el total con IVA (salvo exentas). Oftalmología en
-              Clínica va exenta; estética, al 21 %. El resto mantiene 15 % /
-              21 %.
+              Clínica y facturas al hospital van exentas; estética, al 21 %.
+              El 15 % del hospital es retención IRPF, no IVA.
             </p>
 
             <label className="flex cursor-pointer items-start gap-2.5 text-sm text-ink">
@@ -647,6 +697,43 @@ export function TransactionFormModal({
               </div>
             </dl>
           </div>
+
+          {showIrpf && (
+            <div className="space-y-3 rounded-2xl border border-sand/80 bg-cream-dark/50 px-4 py-3">
+              <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-ink-muted">
+                Retención IRPF
+              </p>
+              <p className="text-[11px] leading-relaxed text-ink-muted">
+                Retención practicada por el hospital sobre la base de la
+                factura. No forma parte del IVA ni se resta de él.
+              </p>
+              <div>
+                <Label htmlFor="irpf-rate">Tipo IRPF (%)</Label>
+                <Input
+                  id="irpf-rate"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={irpfRateInput}
+                  onChange={(e) => setIrpfRateInput(e.target.value)}
+                />
+              </div>
+              <dl className="space-y-1.5 border-t border-sand/70 pt-3 text-sm">
+                <div className="flex items-center justify-between gap-4">
+                  <dt className="text-ink-soft">
+                    IRPF retenido
+                    {parsedIrpfRate > 0 &&
+                      ` (${formatVatPercent(parsedIrpfRate)} %)`}
+                  </dt>
+                  <dd className="tabular-nums text-ink">
+                    {vatBreakdown
+                      ? formatCurrencyPrecise(irpfAmount)
+                      : '—'}
+                  </dd>
+                </div>
+              </dl>
+            </div>
+          )}
 
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="secondary" onClick={handleClose}>

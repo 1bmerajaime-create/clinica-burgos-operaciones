@@ -59,12 +59,21 @@ export interface Transaction {
   vatDeductible?: boolean
   /** Solo gastos: fracción deducible 0–1 (si no se indica y vatDeductible, 1) */
   vatDeductibleShare?: number
+  /**
+   * Retención IRPF (fracción, p.ej. 0.15).
+   * Típico en facturas al hospital (Quirón); independiente del IVA.
+   */
+  irpfRate?: number
+  /** Importe retenido de IRPF (no se resta del IVA). */
+  irpfAmount?: number
   date: string
   description: string
   invoiceFileName?: string
   /** MIME del archivo de factura persistido (IndexedDB). */
   invoiceMimeType?: string
   createdAt: string
+  /** Última modificación (sync nube / backup). */
+  updatedAt?: string
 }
 
 export interface MonthlyPoint {

@@ -11,6 +11,8 @@
   },
   "dependencies": {
     "date-fns": "^4.4.0",
+    "firebase": "^11.10.0",
+    "jszip": "^3.10.2",
     "lucide-react": "^1.52.0",
     "pdfjs-dist": "^5.7.284",
     "react": "^19.2.8",
@@ -21,6 +23,7 @@
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",
+    "@types/jszip": "^3.4.0",
     "@types/node": "^24.13.3",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.7",

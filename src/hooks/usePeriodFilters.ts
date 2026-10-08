@@ -32,14 +32,27 @@ export function usePeriodFilters(
     : (years[0] ?? currentYear)
 
   const [year, setYear] = useState(defaultYear)
-  const [period, setPeriod] = useState<ChartGranularity>('month')
+  // Por defecto año completo: los movimientos publicados suelen repartirse
+  // en varios meses y un filtro mensual vacío parece “sin datos”.
+  const [period, setPeriod] = useState<ChartGranularity>('year')
   const [semester, setSemester] = useState<Semester>(() =>
     now.getMonth() < 6 ? 1 : 2,
   )
   const [quarter, setQuarter] = useState<Quarter>(
     () => (Math.floor(now.getMonth() / 3) + 1) as Quarter,
   )
-  const [month, setMonth] = useState(() => now.getMonth() + 1)
+  const [month, setMonth] = useState(() => {
+    const latest = [...transactions]
+      .map((t) => t.date)
+      .filter(Boolean)
+      .sort()
+      .at(-1)
+    if (latest) {
+      const m = Number(latest.slice(5, 7))
+      if (m >= 1 && m <= 12) return m
+    }
+    return now.getMonth() + 1
+  })
   const [areaFilter, setAreaFilter] = useState<AreaFilter>('total')
 
   useEffect(() => {

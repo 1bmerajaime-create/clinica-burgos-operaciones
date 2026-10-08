@@ -9,8 +9,11 @@ import type {
  * Tipos configurables (provisionales, pendientes de validación fiscal).
  * No representan un tipo legal validado.
  */
-export const DEFAULT_INCOME_VAT_RATE = 0.15
+/** Fallback ingresos cuando no hay regla de área/especialidad. */
+export const DEFAULT_INCOME_VAT_RATE = 0.21
 export const DEFAULT_EXPENSE_VAT_RATE = 0.21
+/** Retención habitual en facturas al hospital (Quirón). Es IRPF, no IVA. */
+export const DEFAULT_HOSPITAL_IRPF_RATE = 0.15
 
 /** @deprecated usar DEFAULT_INCOME_VAT_RATE */
 export const INCOME_VAT_RATE = DEFAULT_INCOME_VAT_RATE
@@ -36,9 +39,10 @@ export function defaultVatRateFor(type: TransactionType): number {
 
 /**
  * Defaults de IVA al crear un movimiento.
+ * - Ingreso/devolución Hospital Quirón → exento (el 15 % es IRPF)
  * - Ingreso/devolución Clínica + Oftalmología → exento
  * - Ingreso/devolución Clínica + Medicina estética → 21 %
- * - Resto igual que antes (ingreso/devolución 15 %, gasto 21 %)
+ * - Gasto → 21 %
  */
 export function defaultVatSettings(input: {
   type: TransactionType
@@ -49,15 +53,88 @@ export function defaultVatSettings(input: {
     return { vatExempt: false, vatRate: DEFAULT_EXPENSE_VAT_RATE }
   }
 
+  if (input.areaId === 'quiron') {
+    return { vatExempt: true, vatRate: 0 }
+  }
+
   if (input.areaId === 'clinica' && input.specialtyId === 'oftalmologia') {
-    return { vatExempt: true, vatRate: DEFAULT_INCOME_VAT_RATE }
+    return { vatExempt: true, vatRate: 0 }
   }
 
   if (input.areaId === 'clinica' && input.specialtyId === 'estetica') {
     return { vatExempt: false, vatRate: DEFAULT_EXPENSE_VAT_RATE }
   }
 
-  return { vatExempt: false, vatRate: DEFAULT_INCOME_VAT_RATE }
+  return { vatExempt: true, vatRate: 0 }
+}
+
+/** Defaults de IRPF (retención). Solo ingresos/devoluciones al hospital. */
+export function defaultIrpfSettings(input: {
+  type: TransactionType
+  areaId?: AreaId
+}): { irpfRate: number } {
+  if (input.type === 'gasto') return { irpfRate: 0 }
+  if (input.areaId === 'quiron') {
+    return { irpfRate: DEFAULT_HOSPITAL_IRPF_RATE }
+  }
+  return { irpfRate: 0 }
+}
+
+/** IRPF = base × tipo. La base es el importe de la factura (sin IVA). */
+export function resolveIrpfAmount(input: {
+  baseAmount: number
+  irpfRate: number
+}): number {
+  const base = roundMoney(Math.abs(input.baseAmount))
+  const rate = normalizeVatRateFraction(Math.max(0, input.irpfRate))
+  if (rate === 0 || base === 0) return 0
+  return roundMoney(base * rate)
+}
+
+/**
+ * Corrige facturas al hospital donde la retención se guardó como IVA.
+ * Deja la operación exenta de IVA y registra IRPF 15 %.
+ */
+export function migrateHospitalVatToIrpf(tx: Transaction): Transaction {
+  if (tx.areaId !== 'quiron' || tx.type === 'gasto') return tx
+
+  // Si ya hay campos IRPF (aunque sea 0), no tocar.
+  if (tx.irpfAmount != null || tx.irpfRate != null) return tx
+
+  const rate =
+    tx.vatRate != null ? normalizeVatRateFraction(tx.vatRate) : undefined
+  const isFifteen =
+    rate == null || Math.abs(rate - DEFAULT_HOSPITAL_IRPF_RATE) < 0.001
+
+  const gross = roundMoney(
+    tx.grossAmount ??
+      (tx.vatAmount != null && tx.netAmount != null
+        ? tx.netAmount + tx.vatAmount
+        : tx.amount),
+  )
+  const irpfAmount =
+    !tx.vatExempt &&
+    tx.vatAmount != null &&
+    tx.vatAmount > 0 &&
+    isFifteen
+      ? roundMoney(tx.vatAmount)
+      : resolveIrpfAmount({
+          baseAmount: gross,
+          irpfRate: DEFAULT_HOSPITAL_IRPF_RATE,
+        })
+
+  return {
+    ...tx,
+    vatExempt: true,
+    vatRate: 0,
+    vatAmount: 0,
+    netAmount: gross,
+    grossAmount: gross,
+    amount: gross,
+    amountIncludesVat: true,
+    irpfRate: DEFAULT_HOSPITAL_IRPF_RATE,
+    irpfAmount,
+  }
 }
 
 export function roundMoney(value: number): number {
@@ -215,6 +292,17 @@ export function deductibleVatOf(tx: Transaction): number {
   return roundMoney(vatAmount * share)
 }
 
+export interface TaxBreakdownLine {
+  transactionId: string
+  date: string
+  description: string
+  areaId: AreaId
+  type: TransactionType
+  /** Importe que aporta al cálculo (con signo) */
+  amount: number
+  role: 'repercutido' | 'deducible' | 'soportado' | 'irpf'
+}
+
 export interface VatEstimate {
   /** Ingresos sin IVA (bases) */
   incomeBase: number
@@ -228,6 +316,15 @@ export interface VatEstimate {
   soportadoDeducible: number
   /** Repercutido − soportado deducible (+ a pagar / − a favor) */
   resultado: number
+  /** Operaciones que forman el cálculo IVA */
+  lines: TaxBreakdownLine[]
+}
+
+export interface IrpfEstimate {
+  /** Suma de retenciones IRPF (ya retenidos) */
+  retenido: number
+  /** Operaciones con retención (facturas al hospital) */
+  lines: TaxBreakdownLine[]
 }
 
 /** Suma base / IVA / total de un conjunto de movimientos (un tipo). */
@@ -264,7 +361,7 @@ export function sumAmountBreakdown(
 
 /**
  * Posición IVA estimada (repercutido − soportado deducible).
- * Independiente de los totales de cards, que usan importe con IVA.
+ * Usa el IVA real de cada factura; no mezcla retenciones IRPF.
  */
 export function estimateVatPosition(transactions: Transaction[]): VatEstimate {
   let incomeBase = 0
@@ -272,21 +369,68 @@ export function estimateVatPosition(transactions: Transaction[]): VatEstimate {
   let repercutido = 0
   let soportado = 0
   let soportadoDeducible = 0
+  const lines: TaxBreakdownLine[] = []
 
   for (const tx of transactions) {
     const b = txBreakdown(tx)
     if (tx.type === 'ingreso') {
       incomeBase += b.netAmount
       repercutido += b.vatAmount
+      if (b.vatAmount !== 0) {
+        lines.push({
+          transactionId: tx.id,
+          date: tx.date,
+          description: tx.description,
+          areaId: tx.areaId,
+          type: tx.type,
+          amount: b.vatAmount,
+          role: 'repercutido',
+        })
+      }
     } else if (tx.type === 'devolucion') {
       incomeBase -= b.netAmount
       repercutido -= b.vatAmount
+      if (b.vatAmount !== 0) {
+        lines.push({
+          transactionId: tx.id,
+          date: tx.date,
+          description: tx.description,
+          areaId: tx.areaId,
+          type: tx.type,
+          amount: -b.vatAmount,
+          role: 'repercutido',
+        })
+      }
     } else {
       expenseBase += b.netAmount
       soportado += b.vatAmount
-      soportadoDeducible += deductibleVatOf(tx)
+      const deducible = deductibleVatOf(tx)
+      soportadoDeducible += deducible
+      if (deducible !== 0) {
+        lines.push({
+          transactionId: tx.id,
+          date: tx.date,
+          description: tx.description,
+          areaId: tx.areaId,
+          type: tx.type,
+          amount: deducible,
+          role: 'deducible',
+        })
+      } else if (b.vatAmount !== 0) {
+        lines.push({
+          transactionId: tx.id,
+          date: tx.date,
+          description: tx.description,
+          areaId: tx.areaId,
+          type: tx.type,
+          amount: b.vatAmount,
+          role: 'soportado',
+        })
+      }
     }
   }
+
+  lines.sort((a, b) => b.date.localeCompare(a.date))
 
   return {
     incomeBase: roundMoney(incomeBase),
@@ -295,10 +439,54 @@ export function estimateVatPosition(transactions: Transaction[]): VatEstimate {
     soportado: roundMoney(soportado),
     soportadoDeducible: roundMoney(soportadoDeducible),
     resultado: roundMoney(repercutido - soportadoDeducible),
+    lines,
   }
 }
 
-/** Normaliza un movimiento con campos IVA coherentes. */
+function txIrpfAmount(tx: Transaction): number {
+  if (tx.irpfAmount != null) return roundMoney(Math.abs(tx.irpfAmount))
+  const rate =
+    tx.irpfRate != null ? normalizeVatRateFraction(tx.irpfRate) : 0
+  if (rate <= 0) return 0
+  const base = tx.netAmount ?? tx.grossAmount ?? tx.amount
+  return resolveIrpfAmount({ baseAmount: base, irpfRate: rate })
+}
+
+/**
+ * Retenciones IRPF ya practicadas (facturas al hospital).
+ * Independiente del IVA: no se suma ni se resta de la posición IVA.
+ */
+export function estimateIrpfWithheld(transactions: Transaction[]): IrpfEstimate {
+  let retenido = 0
+  const lines: TaxBreakdownLine[] = []
+
+  for (const tx of transactions) {
+    if (tx.areaId !== 'quiron') continue
+    if (tx.type !== 'ingreso' && tx.type !== 'devolucion') continue
+    const amount = txIrpfAmount(tx)
+    if (amount === 0) continue
+    const signed = tx.type === 'devolucion' ? -amount : amount
+    retenido += signed
+    lines.push({
+      transactionId: tx.id,
+      date: tx.date,
+      description: tx.description,
+      areaId: tx.areaId,
+      type: tx.type,
+      amount: signed,
+      role: 'irpf',
+    })
+  }
+
+  lines.sort((a, b) => b.date.localeCompare(a.date))
+
+  return {
+    retenido: roundMoney(retenido),
+    lines,
+  }
+}
+
+/** Normaliza un movimiento con campos IVA (e IRPF si vienen) coherentes. */
 export function normalizeVatTransaction<T extends {
   type: TransactionType
   amount: number
@@ -310,6 +498,8 @@ export function normalizeVatTransaction<T extends {
   amountIncludesVat?: boolean
   vatDeductible?: boolean
   vatDeductibleShare?: number
+  irpfRate?: number
+  irpfAmount?: number
 }>(tx: T): T & VatBreakdown {
   const exempt = Boolean(tx.vatExempt) || tx.vatRate === 0
   const vatRate = exempt
@@ -332,6 +522,23 @@ export function normalizeVatTransaction<T extends {
       ? tx.vatDeductible !== false && !exempt
       : undefined
 
+  const irpfRateRaw =
+    tx.irpfRate != null
+      ? normalizeVatRateFraction(Math.max(0, tx.irpfRate))
+      : undefined
+  let irpfAmount: number | undefined
+  let irpfRate: number | undefined
+  if (tx.irpfAmount != null && tx.irpfAmount > 0) {
+    irpfAmount = roundMoney(Math.abs(tx.irpfAmount))
+    irpfRate = irpfRateRaw != null && irpfRateRaw > 0 ? irpfRateRaw : undefined
+  } else if (irpfRateRaw != null && irpfRateRaw > 0) {
+    irpfRate = irpfRateRaw
+    irpfAmount = resolveIrpfAmount({
+      baseAmount: breakdown.netAmount,
+      irpfRate: irpfRateRaw,
+    })
+  }
+
   return {
     ...tx,
     amount: breakdown.netAmount,
@@ -348,5 +555,7 @@ export function normalizeVatTransaction<T extends {
             ? 1
             : 0
         : undefined,
+    irpfRate,
+    irpfAmount,
   }
 }

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   BrowserRouter,
   Navigate,
@@ -9,7 +9,8 @@ import {
 import { Layout } from './components/Layout'
 import { FinanceProvider } from './context/FinanceContext'
 import { PeriodFilterProvider } from './context/PeriodFilterContext'
-import { isAuthenticated } from './lib/auth'
+import { ensureCloudSession, isAuthenticated } from './lib/auth'
+import { isCloudConfigured } from './lib/firebase'
 import { BranchDetail } from './pages/BranchDetail'
 import { Dashboard } from './pages/Dashboard'
 import { Login } from './pages/Login'
@@ -47,7 +48,43 @@ function AuthenticatedApp({ onLogout }: { onLogout: () => void }) {
 
 function AppRoutes() {
   const [authed, setAuthed] = useState(() => isAuthenticated())
+  const [checking, setChecking] = useState(() => isCloudConfigured())
   const navigate = useNavigate()
+
+  useEffect(() => {
+    if (!isCloudConfigured()) {
+      setChecking(false)
+      return
+    }
+    let cancelled = false
+    ;(async () => {
+      try {
+        if (!isAuthenticated()) {
+          setChecking(false)
+          return
+        }
+        const sessionOk = await ensureCloudSession()
+        if (cancelled) return
+        if (!sessionOk) {
+          // Mantén acceso local; la sync mostrará el error.
+          console.warn('[auth] Sin sesión Firebase; se sigue con datos locales')
+        }
+      } finally {
+        if (!cancelled) setChecking(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  if (checking) {
+    return (
+      <div className="flex min-h-screen items-center justify-center text-sm text-ink-muted">
+        Comprobando sesión…
+      </div>
+    )
+  }
 
   if (!authed) {
     return (

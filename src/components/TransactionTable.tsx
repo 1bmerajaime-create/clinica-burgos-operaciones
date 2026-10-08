@@ -70,6 +70,14 @@ function AmountBlock({ t }: { t: Transaction }) {
             </span>
           </>
         )}
+        {t.irpfAmount != null && t.irpfAmount > 0 && (
+          <span className="whitespace-nowrap">
+            IRPF {formatCurrencyPrecise(t.irpfAmount)}
+            {t.irpfRate != null && t.irpfRate > 0
+              ? ` (${formatVatPercent(t.irpfRate)} %)`
+              : ''}
+          </span>
+        )}
       </div>
     </div>
   )
