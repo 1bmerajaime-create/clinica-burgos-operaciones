@@ -53,15 +53,21 @@ function StatCardShell({
             <span className="h-8 w-8 shrink-0" aria-hidden />
           )}
         </div>
-        {amount}
+        <div className="flex min-h-0 flex-1 flex-col">{amount}</div>
       </div>
     </Card>
   )
 
-  if (!interactive || !onClick) return inner
+  if (!interactive || !onClick) return (
+    <div className="h-full min-w-0">{inner}</div>
+  )
 
   return (
-    <button type="button" onClick={onClick} className="group w-full text-left">
+    <button
+      type="button"
+      onClick={onClick}
+      className="group block h-full w-full min-w-0 text-left"
+    >
       {inner}
     </button>
   )
@@ -151,11 +157,11 @@ export function BranchDetail() {
         </Button>
       </div>
 
-      <section className="grid gap-4 sm:grid-cols-3">
+      <section className="grid grid-cols-1 items-stretch gap-4 sm:grid-cols-3">
         <StatCardShell
           label="Resultado"
           amount={
-            <div className="flex flex-col gap-3">
+            <div className="flex h-full min-h-0 flex-col gap-2.5">
               <SignedAmount value={resultado} size="lg" />
               <VatPositionNote resultado={areaVat.resultado} />
             </div>

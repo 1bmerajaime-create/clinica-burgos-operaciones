@@ -165,31 +165,28 @@ export function Dashboard() {
                   size="md"
                 />
 
-                <div className="mt-auto space-y-2 pt-3">
-                  <dl className="space-y-0.5 text-xs">
-                    <div className="flex items-baseline justify-between gap-3">
-                      <dt className="text-ink-muted">{item.primaryLabel}</dt>
-                      <dd>
-                        <SignedAmount
-                          value={item.primaryValue}
-                          kind={item.primaryKind}
-                          forceSign="+"
-                        />
-                      </dd>
-                    </div>
-                    <div className="flex items-baseline justify-between gap-3">
-                      <dt className="text-ink-muted">{item.secondaryLabel}</dt>
-                      <dd>
-                        <SignedAmount
-                          value={item.secondaryValue}
-                          kind={item.secondaryKind}
-                          forceSign="−"
-                        />
-                      </dd>
-                    </div>
-                  </dl>
+                <div className="mt-auto space-y-1 pt-3 text-xs">
+                  <div className="flex items-baseline justify-between gap-3">
+                    <span className="text-ink-muted">{item.primaryLabel}</span>
+                    <SignedAmount
+                      value={item.primaryValue}
+                      kind={item.primaryKind}
+                      forceSign="+"
+                    />
+                  </div>
+                  <div className="flex items-baseline justify-between gap-3">
+                    <span className="text-ink-muted">{item.secondaryLabel}</span>
+                    <SignedAmount
+                      value={item.secondaryValue}
+                      kind={item.secondaryKind}
+                      forceSign="−"
+                    />
+                  </div>
                   {item.showVat && (
-                    <VatPositionNote resultado={item.vatResultado} />
+                    <VatPositionNote
+                      resultado={item.vatResultado}
+                      className="!mt-0"
+                    />
                   )}
                 </div>
               </div>

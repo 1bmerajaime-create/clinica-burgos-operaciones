@@ -32,17 +32,22 @@ export function VatPositionNote({
     )
   }
 
+  // Misma fila que «Base (sin IVA)» en Ingresos/Gastos: etiqueta + importe.
+  const rowLabel =
+    pos.kind === 'pay'
+      ? 'IVA a pagar'
+      : pos.kind === 'credit'
+        ? 'IVA a tu favor'
+        : 'IVA a Hacienda'
+
   return (
-    <div className={`space-y-0.5 text-xs ${className}`}>
-      <div className="flex items-baseline justify-between gap-3">
-        <span className="text-ink-muted">IVA</span>
-        <span className={`tabular-nums ${pos.colorClass}`}>
-          {pos.kind === 'none' ? '0 €' : amount}
-        </span>
-      </div>
-      <p className={`text-[10px] leading-snug ${pos.colorClass}`}>
-        {pos.shortCaption}
-      </p>
+    <div
+      className={`mt-auto flex items-baseline justify-between gap-3 text-xs ${className}`}
+    >
+      <span className="text-ink-muted">{rowLabel}</span>
+      <span className={`tabular-nums ${pos.colorClass}`}>
+        {pos.kind === 'none' ? '0 €' : amount}
+      </span>
     </div>
   )
 }
