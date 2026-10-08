@@ -1,8 +1,13 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { Download, Eye } from 'lucide-react'
 import { AREAS, SPECIALTIES, areaNeedsSpecialty } from '../data/areas'
 import { useFinance } from '../context/FinanceContext'
 import { extractInvoiceFields } from '../lib/invoiceOcr'
 import { formatCurrencyPrecise } from '../lib/format'
+import {
+  downloadBlob,
+  getInvoiceFile,
+} from '../lib/invoiceStore'
 import {
   defaultVatRateFor,
   formatVatPercent,
@@ -14,6 +19,7 @@ import type {
   Transaction,
   TransactionType,
 } from '../types'
+import { InvoicePreviewModal } from './InvoicePreviewModal'
 import { Button, Dialog, Input, Label, Select } from './ui'
 
 interface Props {
@@ -56,6 +62,10 @@ export function TransactionFormModal({
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [description, setDescription] = useState('')
   const [fileName, setFileName] = useState('')
+  const [invoiceFile, setInvoiceFile] = useState<File | null>(null)
+  const [invoiceMimeType, setInvoiceMimeType] = useState('')
+  const [clearInvoice, setClearInvoice] = useState(false)
+  const [previewOpen, setPreviewOpen] = useState(false)
   const [saved, setSaved] = useState(false)
   const [scanning, setScanning] = useState(false)
   const [scanProgress, setScanProgress] = useState(0)
@@ -109,6 +119,10 @@ export function TransactionFormModal({
       setDate(transaction.date)
       setDescription(transaction.description)
       setFileName(transaction.invoiceFileName ?? '')
+      setInvoiceFile(null)
+      setInvoiceMimeType(transaction.invoiceMimeType ?? '')
+      setClearInvoice(false)
+      setPreviewOpen(false)
       setSaved(false)
       setScanning(false)
       setScanProgress(0)
@@ -129,6 +143,10 @@ export function TransactionFormModal({
     setDate(new Date().toISOString().slice(0, 10))
     setDescription('')
     setFileName('')
+    setInvoiceFile(null)
+    setInvoiceMimeType('')
+    setClearInvoice(false)
+    setPreviewOpen(false)
     setSaved(false)
     setScanning(false)
     setScanProgress(0)
@@ -164,6 +182,9 @@ export function TransactionFormModal({
 
   async function handleFile(file: File) {
     setFileName(file.name)
+    setInvoiceFile(file)
+    setInvoiceMimeType(file.type || '')
+    setClearInvoice(false)
     setDescription(conceptFromFileName(file.name))
 
     const isImage = file.type.startsWith('image/')
@@ -218,7 +239,26 @@ export function TransactionFormModal({
     }
   }
 
-  function handleSubmit(e: FormEvent) {
+  const hasInvoice =
+    Boolean(invoiceFile) || (Boolean(fileName) && !clearInvoice)
+
+  async function handleDownloadInvoice() {
+    if (invoiceFile) {
+      downloadBlob(invoiceFile, fileName || invoiceFile.name)
+      return
+    }
+    if (!transaction?.id) return
+    const stored = await getInvoiceFile(transaction.id)
+    if (!stored) {
+      setScanNote(
+        'No hay archivo guardado para descargar. Vuelve a adjuntar la factura.',
+      )
+      return
+    }
+    downloadBlob(stored.blob, stored.fileName)
+  }
+
+  async function handleSubmit(e: FormEvent) {
     e.preventDefault()
     const value = Number(amount.replace(',', '.'))
     if (!value || value <= 0 || !description.trim()) return
@@ -250,17 +290,28 @@ export function TransactionFormModal({
           : undefined,
       date,
       description: description.trim(),
-      invoiceFileName: fileName || transaction?.invoiceFileName || undefined,
+      invoiceFileName: clearInvoice
+        ? undefined
+        : fileName || transaction?.invoiceFileName || undefined,
+      invoiceMimeType: clearInvoice
+        ? undefined
+        : invoiceMimeType ||
+          invoiceFile?.type ||
+          transaction?.invoiceMimeType ||
+          undefined,
+      invoiceFile: invoiceFile ?? undefined,
+      clearInvoice: clearInvoice || undefined,
     }
 
-    if (transaction) updateTransaction(transaction.id, payload)
-    else addTransaction(payload)
+    if (transaction) await updateTransaction(transaction.id, payload)
+    else await addTransaction(payload)
 
     setSaved(true)
     setTimeout(handleClose, 700)
   }
 
   return (
+    <>
     <Dialog open={open} onClose={handleClose} title={title} elevated>
       {saved ? (
         <div className="py-8 text-center animate-fade-up">
@@ -272,7 +323,7 @@ export function TransactionFormModal({
           </p>
         </div>
       ) : (
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
           <div>
             <Label htmlFor="type">Tipo</Label>
             <Select
@@ -330,6 +381,44 @@ export function TransactionFormModal({
                   </div>
                 )}
                 {scanNote && <p>{scanNote}</p>}
+              </div>
+            )}
+
+            {hasInvoice && (
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="!px-3.5"
+                  onClick={() => setPreviewOpen(true)}
+                >
+                  <Eye size={14} />
+                  Vista previa
+                </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="!px-3.5"
+                  onClick={() => void handleDownloadInvoice()}
+                >
+                  <Download size={14} />
+                  Descargar
+                </Button>
+                {isEditing && !clearInvoice && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="!px-3.5"
+                    onClick={() => {
+                      setClearInvoice(true)
+                      setInvoiceFile(null)
+                      setFileName('')
+                      setInvoiceMimeType('')
+                    }}
+                  >
+                    Quitar factura
+                  </Button>
+                )}
               </div>
             )}
           </div>
@@ -514,5 +603,15 @@ export function TransactionFormModal({
         </form>
       )}
     </Dialog>
+
+    <InvoicePreviewModal
+      open={previewOpen}
+      onClose={() => setPreviewOpen(false)}
+      transactionId={invoiceFile ? undefined : transaction?.id}
+      fileName={fileName || transaction?.invoiceFileName}
+      file={invoiceFile}
+      mimeType={invoiceMimeType || invoiceFile?.type || transaction?.invoiceMimeType}
+    />
+    </>
   )
 }

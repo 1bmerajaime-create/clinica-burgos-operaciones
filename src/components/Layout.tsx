@@ -1,20 +1,18 @@
-import { NavLink, Outlet, useLocation } from 'react-router-dom'
-import { LogOut, Plus } from 'lucide-react'
+import { NavLink, Outlet } from 'react-router-dom'
+import { CalendarRange, LogOut } from 'lucide-react'
 import { useState } from 'react'
+import { usePeriodFilter } from '../context/PeriodFilterContext'
 import { logout } from '../lib/auth'
+import { PeriodFilterModal } from './PeriodFilterModal'
 import { Button } from './ui'
-import { TransactionFormModal } from './TransactionFormModal'
 
 interface Props {
   onLogout: () => void
 }
 
 export function Layout({ onLogout }: Props) {
-  const location = useLocation()
-  const [movementOpen, setMovementOpen] = useState(false)
-
-  // Dentro de detalle de rama/especialidad ya hay botones propios
-  const showHeaderActions = !location.pathname.startsWith('/rama/')
+  const { summary } = usePeriodFilter()
+  const [filtersOpen, setFiltersOpen] = useState(false)
 
   function handleLogout() {
     logout()
@@ -33,16 +31,17 @@ export function Layout({ onLogout }: Props) {
             />
           </NavLink>
 
-          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
-            {showHeaderActions && (
-              <Button
-                className="!px-3 sm:!px-4"
-                onClick={() => setMovementOpen(true)}
-              >
-                <Plus size={14} />
-                Movimiento
-              </Button>
-            )}
+          <div className="flex min-w-0 shrink-0 items-center gap-1.5 sm:gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              className="max-w-[min(100%,14rem)] !px-3 sm:max-w-none sm:!px-4"
+              onClick={() => setFiltersOpen(true)}
+              title="Filtros de periodo"
+            >
+              <CalendarRange size={14} />
+              <span className="min-w-0 truncate">{summary}</span>
+            </Button>
             <Button
               variant="ghost"
               className="!px-2.5 sm:!px-3"
@@ -66,10 +65,9 @@ export function Layout({ onLogout }: Props) {
         </div>
       </footer>
 
-      <TransactionFormModal
-        open={movementOpen}
-        onClose={() => setMovementOpen(false)}
-        type="ingreso"
+      <PeriodFilterModal
+        open={filtersOpen}
+        onClose={() => setFiltersOpen(false)}
       />
     </div>
   )

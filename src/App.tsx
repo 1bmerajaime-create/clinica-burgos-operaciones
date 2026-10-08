@@ -8,6 +8,7 @@ import {
 } from 'react-router-dom'
 import { Layout } from './components/Layout'
 import { FinanceProvider } from './context/FinanceContext'
+import { PeriodFilterProvider } from './context/PeriodFilterContext'
 import { isAuthenticated } from './lib/auth'
 import { BranchDetail } from './pages/BranchDetail'
 import { Dashboard } from './pages/Dashboard'
@@ -18,26 +19,28 @@ import { SpecialtyDetail } from './pages/SpecialtyDetail'
 function AuthenticatedApp({ onLogout }: { onLogout: () => void }) {
   return (
     <FinanceProvider>
-      <Routes>
-        <Route element={<Layout onLogout={onLogout} />}>
-          <Route index element={<Dashboard />} />
-          <Route path="movimientos" element={<Movements />} />
-          <Route
-            path="rama/oftalmologia"
-            element={<Navigate to="/rama/clinica" replace />}
-          />
-          <Route
-            path="rama/estetica"
-            element={<Navigate to="/rama/clinica" replace />}
-          />
-          <Route
-            path="rama/:branchId/:specialtyId"
-            element={<SpecialtyDetail />}
-          />
-          <Route path="rama/:branchId" element={<BranchDetail />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Route>
-      </Routes>
+      <PeriodFilterProvider>
+        <Routes>
+          <Route element={<Layout onLogout={onLogout} />}>
+            <Route index element={<Dashboard />} />
+            <Route path="movimientos" element={<Movements />} />
+            <Route
+              path="rama/oftalmologia"
+              element={<Navigate to="/rama/clinica" replace />}
+            />
+            <Route
+              path="rama/estetica"
+              element={<Navigate to="/rama/clinica" replace />}
+            />
+            <Route
+              path="rama/:branchId/:specialtyId"
+              element={<SpecialtyDetail />}
+            />
+            <Route path="rama/:branchId" element={<BranchDetail />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Route>
+        </Routes>
+      </PeriodFilterProvider>
     </FinanceProvider>
   )
 }

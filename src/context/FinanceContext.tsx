@@ -12,6 +12,10 @@ import {
   SEED_TRANSACTIONS,
 } from '../data/seed'
 import {
+  deleteInvoiceFile,
+  saveInvoiceFile,
+} from '../lib/invoiceStore'
+import {
   defaultVatRateFor,
   normalizeVatTransaction,
   reinterpretAsVatFromTotal,
@@ -42,6 +46,11 @@ export interface NewTransactionInput {
   date: string
   description: string
   invoiceFileName?: string
+  invoiceMimeType?: string
+  /** Archivo de factura a persistir (no se serializa en localStorage). */
+  invoiceFile?: Blob
+  /** Si true, elimina la factura guardada del movimiento. */
+  clearInvoice?: boolean
 }
 
 function withVatFields(input: NewTransactionInput): NewTransactionInput {
@@ -92,9 +101,9 @@ interface FinanceContextValue {
   transactions: Transaction[]
   products: AestheticProduct[]
   productSales: ProductSale[]
-  addTransaction: (input: NewTransactionInput) => void
-  updateTransaction: (id: string, input: NewTransactionInput) => void
-  removeTransaction: (id: string) => void
+  addTransaction: (input: NewTransactionInput) => Promise<void>
+  updateTransaction: (id: string, input: NewTransactionInput) => Promise<void>
+  removeTransaction: (id: string) => Promise<void>
   addProduct: (input: NewProductInput) => void
   updateProduct: (id: string, input: NewProductInput) => void
   removeProduct: (id: string) => void
@@ -200,11 +209,26 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
   )
 
   const addTransaction = useCallback(
-    (input: NewTransactionInput) => {
+    async (input: NewTransactionInput) => {
+      const { invoiceFile, clearInvoice: _clear, ...rest } = input
+      const id = uid('tx')
+      const fields = withVatFields(rest)
       const tx: Transaction = {
-        id: uid('tx'),
-        ...withVatFields(input),
+        id,
+        ...fields,
+        invoiceFileName: fields.invoiceFileName,
+        invoiceMimeType:
+          fields.invoiceMimeType ||
+          (invoiceFile ? invoiceFile.type || undefined : undefined),
         createdAt: new Date().toISOString(),
+      }
+      if (invoiceFile && tx.invoiceFileName) {
+        await saveInvoiceFile(
+          id,
+          invoiceFile,
+          tx.invoiceFileName,
+          tx.invoiceMimeType,
+        )
       }
       persistTx([tx, ...transactions])
     },
@@ -212,17 +236,41 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
   )
 
   const updateTransaction = useCallback(
-    (id: string, input: NewTransactionInput) => {
-      const next = withVatFields(input)
+    async (id: string, input: NewTransactionInput) => {
+      const { invoiceFile, clearInvoice, ...rest } = input
+      const prev = transactions.find((t) => t.id === id)
+      const fields = withVatFields(rest)
+
+      if (clearInvoice) {
+        await deleteInvoiceFile(id)
+        fields.invoiceFileName = undefined
+        fields.invoiceMimeType = undefined
+      } else if (invoiceFile && fields.invoiceFileName) {
+        await saveInvoiceFile(
+          id,
+          invoiceFile,
+          fields.invoiceFileName,
+          fields.invoiceMimeType || invoiceFile.type || undefined,
+        )
+        fields.invoiceMimeType =
+          fields.invoiceMimeType || invoiceFile.type || undefined
+      } else {
+        fields.invoiceFileName =
+          fields.invoiceFileName ?? prev?.invoiceFileName
+        fields.invoiceMimeType =
+          fields.invoiceMimeType ?? prev?.invoiceMimeType
+      }
+
       persistTx(
-        transactions.map((t) => (t.id === id ? { ...t, ...next } : t)),
+        transactions.map((t) => (t.id === id ? { ...t, ...fields } : t)),
       )
     },
     [persistTx, transactions],
   )
 
   const removeTransaction = useCallback(
-    (id: string) => {
+    async (id: string) => {
+      await deleteInvoiceFile(id)
       persistTx(transactions.filter((t) => t.id !== id))
     },
     [persistTx, transactions],

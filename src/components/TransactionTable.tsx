@@ -1,5 +1,5 @@
-import { useState, type ReactNode } from 'react'
-import { Pencil, Paperclip, Trash2 } from 'lucide-react'
+import { useState, type MouseEvent, type ReactNode } from 'react'
+import { Paperclip, Trash2 } from 'lucide-react'
 import { getArea, specialtyLabel } from '../data/areas'
 import { useFinance } from '../context/FinanceContext'
 import { formatCurrencyPrecise, formatDate } from '../lib/format'
@@ -83,11 +83,17 @@ export function TransactionTable({
 
   const colCount = (showArea ? 5 : 4) + (editable ? 1 : 0)
 
-  function handleDelete(t: Transaction) {
+  function handleDelete(e: MouseEvent, t: Transaction) {
+    e.stopPropagation()
     const ok = window.confirm(
       `¿Eliminar este movimiento?\n\n${t.description}`,
     )
-    if (ok) removeTransaction(t.id)
+    if (ok) void removeTransaction(t.id)
+  }
+
+  function openTransaction(t: Transaction) {
+    if (!editable) return
+    setEditing(t)
   }
 
   function rowMeta(t: Transaction) {
@@ -109,7 +115,20 @@ export function TransactionTable({
       {transactions.map((t) => (
         <article
           key={t.id}
-          className="rounded-2xl border border-sand/70 bg-cream-dark/30 px-3.5 py-3"
+          role={editable ? 'button' : undefined}
+          tabIndex={editable ? 0 : undefined}
+          onClick={() => openTransaction(t)}
+          onKeyDown={(e) => {
+            if (editable && (e.key === 'Enter' || e.key === ' ')) {
+              e.preventDefault()
+              openTransaction(t)
+            }
+          }}
+          className={`rounded-2xl border border-sand/70 bg-cream-dark/30 px-3.5 py-3 ${
+            editable
+              ? 'cursor-pointer transition hover:border-ink/20 hover:bg-cream-dark/55'
+              : ''
+          }`}
         >
           <div className="flex items-center justify-between gap-2">
             <div className="flex min-w-0 items-center gap-2">
@@ -124,26 +143,15 @@ export function TransactionTable({
               )}
             </div>
             {editable && (
-              <div className="flex shrink-0 gap-1">
-                <button
-                  type="button"
-                  onClick={() => setEditing(t)}
-                  className="flex h-8 w-8 items-center justify-center rounded-full border border-ink/10 text-ink-soft transition hover:border-ink/30 hover:bg-cream hover:text-ink"
-                  title="Editar"
-                  aria-label="Editar movimiento"
-                >
-                  <Pencil size={14} />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleDelete(t)}
-                  className="flex h-8 w-8 items-center justify-center rounded-full border border-ink/10 text-ink-soft transition hover:border-rose/40 hover:bg-rose/10 hover:text-rose"
-                  title="Eliminar"
-                  aria-label="Eliminar movimiento"
-                >
-                  <Trash2 size={14} />
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={(e) => handleDelete(e, t)}
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-ink/10 text-ink-soft transition hover:border-rose/40 hover:bg-rose/10 hover:text-rose"
+                title="Eliminar"
+                aria-label="Eliminar movimiento"
+              >
+                <Trash2 size={14} />
+              </button>
             )}
           </div>
 
@@ -171,7 +179,9 @@ export function TransactionTable({
             <th className="px-4 py-3 font-medium">Tipo</th>
             <th className="px-4 py-3 text-right font-medium sm:px-6">Importe</th>
             {editable && (
-              <th className="px-4 py-3 text-right font-medium">Acciones</th>
+              <th className="px-4 py-3 text-right font-medium">
+                <span className="sr-only">Eliminar</span>
+              </th>
             )}
           </tr>
         </thead>
@@ -189,7 +199,12 @@ export function TransactionTable({
           {transactions.map((t) => (
             <tr
               key={t.id}
-              className="border-b border-sand/40 transition hover:bg-cream-dark/40"
+              onClick={() => openTransaction(t)}
+              className={`border-b border-sand/40 transition ${
+                editable
+                  ? 'cursor-pointer hover:bg-cream-dark/55'
+                  : 'hover:bg-cream-dark/40'
+              }`}
             >
               <td className="px-4 py-3.5 text-sm text-ink-soft sm:px-6">
                 {formatDate(t.date)}
@@ -229,19 +244,10 @@ export function TransactionTable({
               </td>
               {editable && (
                 <td className="px-4 py-3.5">
-                  <div className="flex items-center justify-end gap-1">
+                  <div className="flex items-center justify-end">
                     <button
                       type="button"
-                      onClick={() => setEditing(t)}
-                      className="flex h-8 w-8 items-center justify-center rounded-full border border-ink/10 text-ink-soft transition hover:border-ink/30 hover:bg-cream hover:text-ink"
-                      title="Editar"
-                      aria-label="Editar movimiento"
-                    >
-                      <Pencil size={14} />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleDelete(t)}
+                      onClick={(e) => handleDelete(e, t)}
                       className="flex h-8 w-8 items-center justify-center rounded-full border border-ink/10 text-ink-soft transition hover:border-rose/40 hover:bg-rose/10 hover:text-rose"
                       title="Eliminar"
                       aria-label="Eliminar movimiento"

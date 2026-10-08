@@ -3,11 +3,13 @@ import { SlidersHorizontal } from 'lucide-react'
 import { TransactionTable } from '../components/TransactionTable'
 import { Button, Dialog, Select } from '../components/ui'
 import { useFinance } from '../context/FinanceContext'
+import { usePeriodFilter } from '../context/PeriodFilterContext'
 import { AREAS, SPECIALTIES } from '../data/areas'
 import type { AreaId, SpecialtyId, TransactionType } from '../types'
 
 export function Movements() {
   const { transactions } = useFinance()
+  const { filterPeriod, summary: periodSummary } = usePeriodFilter()
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [area, setArea] = useState<'all' | AreaId>('all')
   const [specialty, setSpecialty] = useState<'all' | SpecialtyId>('all')
@@ -16,7 +18,7 @@ export function Movements() {
   const showSpecialtyFilter = area === 'clinica' || area === 'quiron'
 
   const filtered = useMemo(() => {
-    return transactions
+    return filterPeriod(transactions)
       .filter((t) => (area === 'all' ? true : t.areaId === area))
       .filter((t) =>
         specialty === 'all' || !showSpecialtyFilter
@@ -29,10 +31,18 @@ export function Movements() {
         (a, b) =>
           b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt),
       )
-  }, [transactions, area, specialty, type, showSpecialtyFilter])
+  }, [
+    filterPeriod,
+    transactions,
+    area,
+    specialty,
+    type,
+    showSpecialtyFilter,
+  ])
 
   const filterSummary = useMemo(() => {
     const parts = [
+      periodSummary,
       area === 'all'
         ? 'Todas'
         : AREAS.find((a) => a.id === area)?.shortName,
@@ -46,7 +56,7 @@ export function Movements() {
           : 'Gastos',
     ].filter(Boolean)
     return parts.join(' · ')
-  }, [area, specialty, type, showSpecialtyFilter])
+  }, [periodSummary, area, specialty, type, showSpecialtyFilter])
 
   const filterFields = (
     <>

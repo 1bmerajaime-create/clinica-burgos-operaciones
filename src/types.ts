@@ -57,6 +57,8 @@ export interface Transaction {
   date: string
   description: string
   invoiceFileName?: string
+  /** MIME del archivo de factura persistido (IndexedDB). */
+  invoiceMimeType?: string
   createdAt: string
 }
 

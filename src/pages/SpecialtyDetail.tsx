@@ -4,14 +4,13 @@ import { Link, Navigate, useParams } from 'react-router-dom'
 import { FinanceChart } from '../components/FinanceChart'
 import { ProductsSection } from '../components/ProductsSection'
 import { MoneyBreakdown } from '../components/MoneyBreakdown'
-import { PeriodFilterBar } from '../components/PeriodFilterBar'
 import { SignedAmount } from '../components/SignedAmount'
 import { TransactionFormModal } from '../components/TransactionFormModal'
 import { TransactionTable } from '../components/TransactionTable'
 import { Button, Card, Dialog } from '../components/ui'
 import { useFinance } from '../context/FinanceContext'
+import { usePeriodFilter } from '../context/PeriodFilterContext'
 import { getArea, getSpecialty } from '../data/areas'
-import { usePeriodFilters } from '../hooks/usePeriodFilters'
 import {
   filterByArea,
   filterBySpecialty,
@@ -83,23 +82,23 @@ export function SpecialtyDetail() {
 
   const id = (area?.id ?? 'clinica') as AreaId
   const specId = (specialty?.id ?? 'oftalmologia') as SpecialtyId
+  const { state, filterPeriod } = usePeriodFilter()
 
   const scopedAll = useMemo(
     () => filterBySpecialty(filterByArea(transactions, id), specId),
     [transactions, id, specId],
   )
-  const filters = usePeriodFilters(scopedAll)
 
   const specialtyTransactions = useMemo(
     () =>
-      filters.filtered
+      filterPeriod(scopedAll)
         .slice()
         .sort(
           (a, b) =>
             b.date.localeCompare(a.date) ||
             b.createdAt.localeCompare(a.createdAt),
         ),
-    [filters.filtered],
+    [filterPeriod, scopedAll],
   )
 
   const ingresos = sumByType(specialtyTransactions, 'ingreso', id, specId)
@@ -149,18 +148,6 @@ export function SpecialtyDetail() {
         </Button>
       </div>
 
-      <PeriodFilterBar
-        state={filters.state}
-        years={filters.years}
-        defaultYear={filters.defaultYear}
-        setYear={filters.setYear}
-        setPeriod={filters.setPeriod}
-        setSemester={filters.setSemester}
-        setQuarter={filters.setQuarter}
-        setMonth={filters.setMonth}
-        resultCount={specialtyTransactions.length}
-      />
-
       <section className="grid gap-4 sm:grid-cols-3">
         <StatCardShell
           label="Resultado"
@@ -196,7 +183,7 @@ export function SpecialtyDetail() {
 
       <FinanceChart
         transactions={scopedAll}
-        period={filters.state}
+        period={state}
         areaId={id}
         specialtyId={specId}
       />
@@ -208,6 +195,16 @@ export function SpecialtyDetail() {
         showArea={false}
         title="Movimientos"
         eyebrow="Periodo seleccionado"
+        action={
+          <Button
+            type="button"
+            className="!px-3.5"
+            onClick={() => openMovement('ingreso')}
+          >
+            <Plus size={14} />
+            Movimiento
+          </Button>
+        }
       />
 
       <Dialog

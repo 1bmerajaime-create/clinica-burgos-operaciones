@@ -3,14 +3,13 @@ import { useMemo, useState, type ReactNode } from 'react'
 import { Link, Navigate, useParams } from 'react-router-dom'
 import { FinanceChart } from '../components/FinanceChart'
 import { MoneyBreakdown } from '../components/MoneyBreakdown'
-import { PeriodFilterBar } from '../components/PeriodFilterBar'
 import { SignedAmount } from '../components/SignedAmount'
 import { TransactionFormModal } from '../components/TransactionFormModal'
 import { TransactionTable } from '../components/TransactionTable'
 import { Button, Card, Dialog, SectionTitle } from '../components/ui'
 import { useFinance } from '../context/FinanceContext'
+import { usePeriodFilter } from '../context/PeriodFilterContext'
 import { SPECIALTIES, getArea } from '../data/areas'
-import { usePeriodFilters } from '../hooks/usePeriodFilters'
 import {
   filterByArea,
   specialtyBreakdown,
@@ -80,23 +79,23 @@ export function BranchDetail() {
   }
 
   const id = (area?.id ?? 'clinica') as AreaId
+  const { state, filterPeriod } = usePeriodFilter()
 
   const scopedAll = useMemo(
     () => filterByArea(transactions, id),
     [transactions, id],
   )
-  const filters = usePeriodFilters(scopedAll)
 
   const areaTransactions = useMemo(
     () =>
-      filters.filtered
+      filterPeriod(scopedAll)
         .slice()
         .sort(
           (a, b) =>
             b.date.localeCompare(a.date) ||
             b.createdAt.localeCompare(a.createdAt),
         ),
-    [filters.filtered],
+    [filterPeriod, scopedAll],
   )
 
   const ingresos = sumByType(areaTransactions, 'ingreso', id)
@@ -141,18 +140,6 @@ export function BranchDetail() {
           Movimiento
         </Button>
       </div>
-
-      <PeriodFilterBar
-        state={filters.state}
-        years={filters.years}
-        defaultYear={filters.defaultYear}
-        setYear={filters.setYear}
-        setPeriod={filters.setPeriod}
-        setSemester={filters.setSemester}
-        setQuarter={filters.setQuarter}
-        setMonth={filters.setMonth}
-        resultCount={areaTransactions.length}
-      />
 
       <section className="grid gap-4 sm:grid-cols-3">
         <StatCardShell
@@ -229,17 +216,23 @@ export function BranchDetail() {
         </Card>
       )}
 
-      <FinanceChart
-        transactions={scopedAll}
-        period={filters.state}
-        areaId={id}
-      />
+      <FinanceChart transactions={scopedAll} period={state} areaId={id} />
 
       <TransactionTable
         transactions={areaTransactions.slice(0, 12)}
         showArea={false}
         title="Movimientos"
         eyebrow="Periodo seleccionado"
+        action={
+          <Button
+            type="button"
+            className="!px-3.5"
+            onClick={() => openMovement('ingreso')}
+          >
+            <Plus size={14} />
+            Movimiento
+          </Button>
+        }
       />
 
       <Dialog

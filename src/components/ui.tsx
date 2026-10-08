@@ -59,11 +59,19 @@ export function Card({
   )
 }
 
-export function Label({ children, htmlFor }: { children: ReactNode; htmlFor?: string }) {
+export function Label({
+  children,
+  htmlFor,
+  className = '',
+}: {
+  children: ReactNode
+  htmlFor?: string
+  className?: string
+}) {
   return (
     <label
       htmlFor={htmlFor}
-      className="mb-1.5 block text-[10px] font-medium uppercase tracking-[0.16em] text-ink-muted"
+      className={`mb-1.5 block text-[10px] font-medium uppercase tracking-[0.16em] text-ink-muted ${className}`}
     >
       {children}
     </label>
@@ -80,11 +88,14 @@ export function Input({
   return <input className={`${fieldClass} ${className}`} {...props} />
 }
 
-export function Select(props: SelectHTMLAttributes<HTMLSelectElement>) {
+export function Select({
+  className = '',
+  ...props
+}: SelectHTMLAttributes<HTMLSelectElement>) {
   return (
     <div className="relative w-full">
       <select
-        className="w-full cursor-pointer appearance-none rounded-xl border border-ink/20 bg-white-soft py-2.5 pl-3.5 pr-10 text-[13px] font-medium text-ink shadow-sm outline-none transition hover:border-ink/35 focus:border-ink/40 focus:bg-cream"
+        className={`w-full cursor-pointer appearance-none rounded-xl border border-ink/20 bg-white-soft py-2.5 pl-3.5 pr-10 text-[13px] font-medium text-ink shadow-sm outline-none transition hover:border-ink/35 focus:border-ink/40 focus:bg-cream ${className}`}
         {...props}
       />
       <span
@@ -135,6 +146,12 @@ export function SectionTitle({
   )
 }
 
+function modalZIndex(elevated: boolean | 'nested') {
+  if (elevated === 'nested') return 'z-[110]'
+  if (elevated) return 'z-[90]'
+  return 'z-[80]'
+}
+
 export function Modal({
   open,
   onClose,
@@ -150,8 +167,8 @@ export function Modal({
   eyebrow?: string
   children: ReactNode
   size?: 'md' | 'lg' | 'xl'
-  /** Por encima de otro modal (p.ej. formulario sobre listado) */
-  elevated?: boolean
+  /** Por encima de otro modal (p.ej. formulario sobre listado). `'nested'` = encima de un modal elevated. */
+  elevated?: boolean | 'nested'
 }) {
   if (!open || typeof document === 'undefined') return null
 
@@ -160,9 +177,7 @@ export function Modal({
 
   return createPortal(
     <div
-      className={`fixed inset-0 flex items-end justify-center p-4 sm:items-center ${
-        elevated ? 'z-[90]' : 'z-[80]'
-      }`}
+      className={`fixed inset-0 flex items-end justify-center p-4 sm:items-center ${modalZIndex(elevated)}`}
     >
       <button
         type="button"
@@ -215,7 +230,7 @@ export function BottomSheet({
   eyebrow?: string
   children: ReactNode
   footer?: ReactNode
-  elevated?: boolean
+  elevated?: boolean | 'nested'
 }) {
   useEffect(() => {
     if (!open) return
@@ -231,7 +246,11 @@ export function BottomSheet({
   return createPortal(
     <div
       className={`fixed inset-0 flex items-end justify-center ${
-        elevated ? 'z-[90]' : 'z-[85]'
+        elevated === 'nested'
+          ? 'z-[110]'
+          : elevated
+            ? 'z-[90]'
+            : 'z-[85]'
       }`}
     >
       <button
@@ -300,7 +319,7 @@ export function Dialog({
   children: ReactNode
   footer?: ReactNode
   size?: 'md' | 'lg' | 'xl'
-  elevated?: boolean
+  elevated?: boolean | 'nested'
 }) {
   const isPhone = useIsPhone()
   const [mounted, setMounted] = useState(false)

@@ -25,20 +25,28 @@ export function usePeriodFilters(
 ) {
   const withArea = options?.withArea ?? false
   const years = useMemo(() => availableYears(transactions), [transactions])
-  const defaultYear = years[0] ?? new Date().getFullYear()
+  const now = new Date()
+  const currentYear = now.getFullYear()
+  const defaultYear = years.includes(currentYear)
+    ? currentYear
+    : (years[0] ?? currentYear)
 
   const [year, setYear] = useState(defaultYear)
-  const [period, setPeriod] = useState<ChartGranularity>('year')
-  const [semester, setSemester] = useState<Semester>(1)
-  const [quarter, setQuarter] = useState<Quarter>(1)
-  const [month, setMonth] = useState(() => new Date().getMonth() + 1)
+  const [period, setPeriod] = useState<ChartGranularity>('month')
+  const [semester, setSemester] = useState<Semester>(() =>
+    now.getMonth() < 6 ? 1 : 2,
+  )
+  const [quarter, setQuarter] = useState<Quarter>(
+    () => (Math.floor(now.getMonth() / 3) + 1) as Quarter,
+  )
+  const [month, setMonth] = useState(() => now.getMonth() + 1)
   const [areaFilter, setAreaFilter] = useState<AreaFilter>('total')
 
   useEffect(() => {
     if (years.length > 0 && !years.includes(year)) {
-      setYear(years[0])
+      setYear(years.includes(currentYear) ? currentYear : years[0])
     }
-  }, [years, year])
+  }, [years, year, currentYear])
 
   const state: PeriodFilterState = {
     year,
