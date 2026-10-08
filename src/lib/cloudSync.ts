@@ -2,10 +2,13 @@ import {
   collection,
   deleteDoc,
   doc,
+  getDoc,
   getDocFromServer,
+  getDocs,
   getDocsFromServer,
   setDoc,
   type DocumentData,
+  type Firestore,
 } from 'firebase/firestore'
 import {
   deleteObject,
@@ -14,9 +17,10 @@ import {
   ref,
   uploadBytes,
 } from 'firebase/storage'
+import { SEED_TRANSACTIONS } from '../data/seed'
 import type { AestheticProduct, ProductSale, Transaction } from '../types'
 import { ensureCloudSession } from './auth'
-import { withTimeout } from './cloudTimeout'
+import { withRetry, withTimeout } from './cloudTimeout'
 import {
   getDb,
   getFirebaseStorage,
@@ -37,11 +41,13 @@ const TX_COLLECTION = 'transactions'
 const INV_COLLECTION = 'inventory'
 const INV_DOC_ID = 'main'
 
-const PULL_TIMEOUT_MS = 10_000
-const PUSH_TIMEOUT_MS = 20_000
+/** Más generoso en móvil (Safari + red celular). */
+const PULL_TIMEOUT_MS = 35_000
+const PUSH_CHUNK_TIMEOUT_MS = 25_000
+const PUSH_CHUNK_SIZE = 15
 
 const FIRESTORE_SETUP_HINT =
-  'Firestore no responde. En Firebase Console → Firestore Database → Crear base de datos (modo producción), publica las reglas de firebase/firestore.rules y pulsa «Sincronizar ahora».'
+  'No se pudo sincronizar con la nube. Comprueba la conexión y pulsa «Reintentar».'
 
 function mapCloudError(err: unknown): Error {
   const message = err instanceof Error ? err.message : String(err)
@@ -92,6 +98,56 @@ function txFromDoc(data: DocumentData): Transaction | null {
   return rest as Transaction
 }
 
+async function fetchTxSnapshot(db: Firestore) {
+  try {
+    return await withTimeout(
+      getDocsFromServer(collection(db, TX_COLLECTION)),
+      PULL_TIMEOUT_MS,
+      'descargar movimientos',
+    )
+  } catch {
+    // En móvil/offline, caer a caché local de Firestore.
+    return await withTimeout(
+      getDocs(collection(db, TX_COLLECTION)),
+      PULL_TIMEOUT_MS,
+      'descargar movimientos',
+    )
+  }
+}
+
+async function fetchInventory(db: Firestore): Promise<{
+  products: AestheticProduct[]
+  productSales: ProductSale[]
+}> {
+  try {
+    let invSnap
+    try {
+      invSnap = await withTimeout(
+        getDocFromServer(doc(db, INV_COLLECTION, INV_DOC_ID)),
+        PULL_TIMEOUT_MS,
+        'descargar inventario',
+      )
+    } catch {
+      invSnap = await withTimeout(
+        getDoc(doc(db, INV_COLLECTION, INV_DOC_ID)),
+        PULL_TIMEOUT_MS,
+        'descargar inventario',
+      )
+    }
+    const inv = invSnap.exists() ? invSnap.data() : null
+    return {
+      products: Array.isArray(inv?.products)
+        ? (inv!.products as AestheticProduct[])
+        : [],
+      productSales: Array.isArray(inv?.sales)
+        ? (inv!.sales as ProductSale[])
+        : [],
+    }
+  } catch {
+    return { products: [], productSales: [] }
+  }
+}
+
 export async function pullCloudSnapshot(): Promise<{
   transactions: Transaction[]
   products: AestheticProduct[]
@@ -100,37 +156,20 @@ export async function pullCloudSnapshot(): Promise<{
   const db = getDb()
   if (!db || !(await ensureCloudSession())) return null
 
-  const snap = await withTimeout(
-    getDocsFromServer(collection(db, TX_COLLECTION)),
-    PULL_TIMEOUT_MS,
-    'descargar movimientos',
-  )
-  const transactions: Transaction[] = []
-  for (const d of snap.docs) {
-    const tx = txFromDoc(d.data())
-    if (tx) transactions.push(tx)
-  }
-
-  let products: AestheticProduct[] = []
-  let productSales: ProductSale[] = []
-  try {
-    const invSnap = await withTimeout(
-      getDocFromServer(doc(db, INV_COLLECTION, INV_DOC_ID)),
-      PULL_TIMEOUT_MS,
-      'descargar inventario',
-    )
-    const inv = invSnap.exists() ? invSnap.data() : null
-    products = Array.isArray(inv?.products)
-      ? (inv!.products as AestheticProduct[])
-      : []
-    productSales = Array.isArray(inv?.sales)
-      ? (inv!.sales as ProductSale[])
-      : []
-  } catch {
-    /* inventario opcional */
-  }
-
-  return { transactions, products, productSales }
+  return withRetry(async () => {
+    const snap = await fetchTxSnapshot(db)
+    const transactions: Transaction[] = []
+    for (const d of snap.docs) {
+      const tx = txFromDoc(d.data())
+      if (tx) transactions.push(tx)
+    }
+    const inv = await fetchInventory(db)
+    return {
+      transactions,
+      products: inv.products,
+      productSales: inv.productSales,
+    }
+  }, 3, 1000)
 }
 
 /** Descarga facturas en segundo plano (no bloquea el arranque). */
@@ -195,22 +234,26 @@ export async function pushAllToCloud(payload: {
   }
 
   const now = new Date().toISOString()
-  await withTimeout(
-    Promise.all(
-      payload.transactions.map((tx) =>
-        setDoc(
-          doc(db, TX_COLLECTION, tx.id),
-          stripUndefined({
-            ...tx,
-            updatedAt: tx.updatedAt ?? now,
-            deletedAt: null,
-          }),
+  const txs = payload.transactions
+  for (let i = 0; i < txs.length; i += PUSH_CHUNK_SIZE) {
+    const chunk = txs.slice(i, i + PUSH_CHUNK_SIZE)
+    await withTimeout(
+      Promise.all(
+        chunk.map((tx) =>
+          setDoc(
+            doc(db, TX_COLLECTION, tx.id),
+            stripUndefined({
+              ...tx,
+              updatedAt: tx.updatedAt ?? now,
+              deletedAt: null,
+            }),
+          ),
         ),
       ),
-    ),
-    PUSH_TIMEOUT_MS,
-    'subir movimientos',
-  )
+      PUSH_CHUNK_TIMEOUT_MS,
+      `subir movimientos (${i + 1}–${i + chunk.length})`,
+    )
+  }
 
   await withTimeout(
     setDoc(
@@ -376,7 +419,11 @@ export async function hydrateFromCloud(local: {
     throw mapCloudError(err)
   }
 
-  if (!remote) return { ...local, source: 'skipped' }
+  if (!remote) {
+    throw new Error(
+      'No hay sesión en Firebase. Comprueba la conexión y vuelve a entrar.',
+    )
+  }
 
   const remoteEmpty =
     remote.transactions.length === 0 &&
@@ -387,7 +434,17 @@ export async function hydrateFromCloud(local: {
     return { ...remote, source: 'cloud' }
   }
 
-  if (local.transactions.length > 0 || local.products.length > 0) {
+  // No subir el seed de demo a una nube vacía.
+  const seedIds = new Set(SEED_TRANSACTIONS.map((t) => t.id))
+  const localLooksLikeSeed =
+    local.transactions.length > 0 &&
+    local.transactions.length <= SEED_TRANSACTIONS.length &&
+    local.transactions.every((t) => seedIds.has(t.id))
+
+  if (
+    (local.transactions.length > 0 || local.products.length > 0) &&
+    !localLooksLikeSeed
+  ) {
     try {
       await pushAllToCloud(local)
     } catch (err) {

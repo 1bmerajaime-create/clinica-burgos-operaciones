@@ -39,7 +39,7 @@ function cloudPassword(): string {
 
 /**
  * Asegura sesión Firebase (reintenta login técnico si hace falta).
- * No bloquea más de unos segundos.
+ * Timeouts más largos para Safari/móvil en red lenta.
  */
 export async function ensureCloudSession(): Promise<boolean> {
   if (!isCloudConfigured()) return false
@@ -48,24 +48,29 @@ export async function ensureCloudSession(): Promise<boolean> {
   if (!auth || !email) return false
 
   try {
-    await withTimeout(auth.authStateReady(), 8000, 'comprobar sesión')
+    await withTimeout(auth.authStateReady(), 20_000, 'comprobar sesión')
   } catch {
-    return false
+    /* seguir e intentar login igual */
   }
 
   if (auth.currentUser) return true
 
-  try {
-    await withTimeout(
-      signInWithEmailAndPassword(auth, email, cloudPassword()),
-      12000,
-      'iniciar sesión en la nube',
-    )
-    return Boolean(auth.currentUser)
-  } catch (err) {
-    console.warn('[auth] ensureCloudSession failed', err)
-    return false
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      await withTimeout(
+        signInWithEmailAndPassword(auth, email, cloudPassword()),
+        20_000,
+        'iniciar sesión en la nube',
+      )
+      if (auth.currentUser) return true
+    } catch (err) {
+      console.warn(`[auth] ensureCloudSession attempt ${attempt + 1}`, err)
+      if (attempt < 2) {
+        await new Promise((r) => setTimeout(r, 800 * (attempt + 1)))
+      }
+    }
   }
+  return false
 }
 
 /**
@@ -83,7 +88,7 @@ export async function login(password: string): Promise<boolean> {
     try {
       await withTimeout(
         signInWithEmailAndPassword(auth, email, cloudPassword()),
-        12000,
+        20_000,
         'iniciar sesión en la nube',
       )
     } catch (err) {

@@ -156,8 +156,16 @@ const TX_KEY = 'cb-operaciones-transactions-v16'
 const TX_KEY_PREFIX = 'cb-operaciones-transactions-v'
 const INV_KEY = 'cb-operaciones-inventory-v4'
 
+function safeSetItem(key: string, value: string) {
+  try {
+    localStorage.setItem(key, value)
+  } catch (err) {
+    console.warn('[storage] setItem failed', key, err)
+  }
+}
+
 function persistMigrated(txs: Transaction[]): Transaction[] {
-  localStorage.setItem(TX_KEY, JSON.stringify(txs))
+  safeSetItem(TX_KEY, JSON.stringify(txs))
   return txs
 }
 
@@ -182,12 +190,25 @@ function findLegacyTransactionKey(): string | null {
   }
 }
 
+function isSeedOnly(txs: Transaction[]): boolean {
+  if (txs.length === 0 || txs.length > SEED_TRANSACTIONS.length) return false
+  const seedIds = new Set(SEED_TRANSACTIONS.map((t) => t.id))
+  return txs.every((t) => seedIds.has(t.id))
+}
+
 function loadTransactions(): Transaction[] {
   try {
     const raw = localStorage.getItem(TX_KEY)
     if (raw) {
       const parsed = JSON.parse(raw) as Transaction[]
-      if (Array.isArray(parsed)) return parsed.map(normalizeTransaction)
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        const normalized = parsed.map(normalizeTransaction)
+        // Seed local antiguo en móvil: no usarlo si hay nube (fuente de verdad).
+        if (isCloudConfigured() && isSeedOnly(normalized)) {
+          return []
+        }
+        return normalized
+      }
     }
   } catch {
     /* ignore */
@@ -200,17 +221,22 @@ function loadTransactions(): Transaction[] {
       if (legacy) {
         const parsed = JSON.parse(legacy) as Transaction[]
         if (Array.isArray(parsed) && parsed.length > 0) {
-          return persistMigrated(
-            parsed.map((tx) =>
-              normalizeTransaction(reinterpretAsVatFromTotal(tx)),
-            ),
+          const normalized = parsed.map((tx) =>
+            normalizeTransaction(reinterpretAsVatFromTotal(tx)),
           )
+          if (isCloudConfigured() && isSeedOnly(normalized)) {
+            return []
+          }
+          return persistMigrated(normalized)
         }
       }
     } catch {
       /* fall through */
     }
   }
+
+  // Con nube configurada no usamos seed: evita mostrar 5 movimientos falsos en móvil.
+  if (isCloudConfigured()) return []
 
   return SEED_TRANSACTIONS.map((tx) =>
     normalizeTransaction(reinterpretAsVatFromTotal(tx)),
@@ -235,6 +261,7 @@ function loadInventory(): { products: AestheticProduct[]; sales: ProductSale[] }
   } catch {
     /* ignore */
   }
+  if (isCloudConfigured()) return { products: [], sales: [] }
   return { products: SEED_PRODUCTS, sales: SEED_PRODUCT_SALES }
 }
 
@@ -268,14 +295,14 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
 
   const persistTx = useCallback((next: Transaction[]) => {
     setTransactions(next)
-    localStorage.setItem(TX_KEY, JSON.stringify(next))
+    safeSetItem(TX_KEY, JSON.stringify(next))
   }, [])
 
   const persistInv = useCallback(
     (nextProducts: AestheticProduct[], nextSales: ProductSale[]) => {
       setProducts(nextProducts)
       setProductSales(nextSales)
-      localStorage.setItem(
+      safeSetItem(
         INV_KEY,
         JSON.stringify({ products: nextProducts, sales: nextSales }),
       )
@@ -283,35 +310,61 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
     [],
   )
 
+  const applyCloudSnapshot = useCallback(
+    (hydrated: {
+      transactions: Transaction[]
+      products: AestheticProduct[]
+      productSales: ProductSale[]
+      source: 'cloud' | 'local' | 'merged' | 'skipped'
+    }) => {
+      if (hydrated.source === 'skipped') {
+        setSyncError(
+          'Sin conexión con la nube. Pulsa «Reintentar» cuando tengas red.',
+        )
+        return false
+      }
+      if (
+        hydrated.source === 'cloud' ||
+        hydrated.source === 'merged' ||
+        hydrated.source === 'local'
+      ) {
+        const txs = hydrated.transactions.map(normalizeTransaction)
+        persistTx(txs)
+        persistInv(hydrated.products, hydrated.productSales)
+        void pullMissingInvoices(txs).catch(() => {
+          /* no bloquear */
+        })
+      }
+      const at = new Date().toISOString()
+      setLastSyncedAt(at)
+      setLastSynced(at)
+      setSyncError(null)
+      return true
+    },
+    [persistInv, persistTx],
+  )
+
+  const pullAndApply = useCallback(async () => {
+    const localInv = loadInventory()
+    const hydrated = await hydrateFromCloud({
+      transactions: loadTransactions(),
+      products: localInv.products,
+      productSales: localInv.sales,
+    })
+    applyCloudSnapshot(hydrated)
+  }, [applyCloudSnapshot])
+
   useEffect(() => {
     if (!cloudEnabled) return
     let cancelled = false
+    let lastAttempt = 0
 
-    ;(async () => {
+    const run = async (fromResume = false) => {
+      const now = Date.now()
+      if (fromResume && now - lastAttempt < 8_000) return
+      lastAttempt = now
       try {
-        const localInv = loadInventory()
-        const hydrated = await hydrateFromCloud({
-          transactions: loadTransactions(),
-          products: localInv.products,
-          productSales: localInv.sales,
-        })
-        if (cancelled) return
-        if (
-          hydrated.source === 'cloud' ||
-          hydrated.source === 'merged' ||
-          hydrated.source === 'local'
-        ) {
-          const txs = hydrated.transactions.map(normalizeTransaction)
-          persistTx(txs)
-          persistInv(hydrated.products, hydrated.productSales)
-          void pullMissingInvoices(txs).catch(() => {
-            /* no bloquear */
-          })
-        }
-        const at = new Date().toISOString()
-        setLastSyncedAt(at)
-        setLastSynced(at)
-        setSyncError(null)
+        await pullAndApply()
       } catch (err) {
         if (!cancelled) {
           setSyncError(
@@ -321,28 +374,37 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
       } finally {
         if (!cancelled) setReady(true)
       }
-    })()
+    }
+
+    void run(false)
+
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') void run(true)
+    }
+    const onOnline = () => void run(true)
+    document.addEventListener('visibilitychange', onVisibility)
+    window.addEventListener('online', onOnline)
 
     return () => {
       cancelled = true
+      document.removeEventListener('visibilitychange', onVisibility)
+      window.removeEventListener('online', onOnline)
     }
-  }, [cloudEnabled, persistInv, persistTx])
+  }, [cloudEnabled, pullAndApply])
 
   const syncNow = useCallback(async () => {
     if (!cloudEnabled) return
     setSyncError(null)
     try {
-      await pushAllToCloud({ transactions, products, productSales })
-      const at = new Date().toISOString()
-      setLastSyncedAt(at)
-      setLastSynced(at)
+      // Primero bajamos de la nube (fuente de verdad); solo sube si está vacía.
+      await pullAndApply()
     } catch (err) {
       const message =
         err instanceof Error ? err.message : 'Error al sincronizar'
       setSyncError(message)
       throw err
     }
-  }, [cloudEnabled, products, productSales, transactions])
+  }, [cloudEnabled, pullAndApply])
 
   const replaceAllData = useCallback(
     async (payload: BackupPayload) => {

@@ -1,5 +1,5 @@
 import { NavLink, Outlet } from 'react-router-dom'
-import { CalendarRange, LogOut } from 'lucide-react'
+import { CalendarRange, LogOut, RefreshCw } from 'lucide-react'
 import { useState } from 'react'
 import { useFinance } from '../context/FinanceContext'
 import { usePeriodFilter } from '../context/PeriodFilterContext'
@@ -13,12 +13,24 @@ interface Props {
 
 export function Layout({ onLogout }: Props) {
   const { summary } = usePeriodFilter()
-  const { cloudEnabled, syncError } = useFinance()
+  const { cloudEnabled, syncError, syncNow } = useFinance()
   const [filtersOpen, setFiltersOpen] = useState(false)
+  const [retrying, setRetrying] = useState(false)
 
   async function handleLogout() {
     await logout()
     onLogout()
+  }
+
+  async function handleRetrySync() {
+    setRetrying(true)
+    try {
+      await syncNow()
+    } catch {
+      /* syncError ya en contexto */
+    } finally {
+      setRetrying(false)
+    }
   }
 
   return (
@@ -62,6 +74,16 @@ export function Layout({ onLogout }: Props) {
           <div className="mb-5 rounded-2xl border border-rose/25 bg-rose/5 px-4 py-3 text-[12px] leading-relaxed text-rose">
             <p className="font-medium">Sincronización en la nube no disponible</p>
             <p className="mt-1 text-rose/90">{syncError}</p>
+            <Button
+              type="button"
+              variant="secondary"
+              className="mt-3 !px-3"
+              disabled={retrying}
+              onClick={() => void handleRetrySync()}
+            >
+              <RefreshCw size={13} className={retrying ? 'animate-spin' : ''} />
+              {retrying ? 'Sincronizando…' : 'Reintentar'}
+            </Button>
           </div>
         )}
         <Outlet />
