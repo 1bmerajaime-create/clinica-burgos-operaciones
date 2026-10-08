@@ -9,8 +9,9 @@
   --color-ink-muted: #8A847C;
   --color-brass: #A68B5B;
   --color-brass-soft: #C4B08A;
-  --color-olive: #7A8471;
-  --color-rose: #B07A6E;
+  /* Sentimiento: más vivos para importes + / − y pastillas */
+  --color-olive: #1FA84A;
+  --color-rose: #E23B3B;
   --color-white-soft: #FFFCFA;
   --font-display: "Callingstone", "Montserrat", system-ui, sans-serif;
   --font-sans: "Montserrat", system-ui, sans-serif;

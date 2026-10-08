@@ -65,16 +65,16 @@ function AmountBlock({ t }: { t: Transaction }) {
 function TypeBadge({ type }: { type: Transaction['type'] }) {
   const styles =
     type === 'ingreso'
-      ? 'bg-olive/15 text-olive'
+      ? 'bg-olive/25 text-olive'
       : type === 'devolucion'
-        ? 'bg-brass/15 text-brass'
-        : 'bg-rose/15 text-rose'
+        ? 'bg-brass/20 text-brass'
+        : 'bg-rose/25 text-rose'
   const label =
     type === 'devolucion' ? 'devolución' : type
 
   return (
     <span
-      className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.12em] ${styles}`}
+      className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] ${styles}`}
     >
       {label}
     </span>

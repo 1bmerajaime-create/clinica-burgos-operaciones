@@ -17,8 +17,8 @@ import type { PeriodFilterState } from '../hooks/usePeriodFilters'
 import type { AreaId, SpecialtyId, Transaction } from '../types'
 import { Card, Label, Select } from './ui'
 
-const INCOME_COLOR = '#5F8F5A'
-const EXPENSE_COLOR = '#C45C5C'
+const INCOME_COLOR = '#1FA84A'
+const EXPENSE_COLOR = '#E23B3B'
 
 type ChartType = 'bar' | 'line'
 
