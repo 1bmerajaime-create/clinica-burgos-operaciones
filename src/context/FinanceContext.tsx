@@ -58,7 +58,7 @@ function withVatFields(input: NewTransactionInput): NewTransactionInput {
   const vatRate = exempt
     ? 0
     : (input.vatRate ?? defaultVatRateFor(input.type))
-  // Por defecto: IVA = total × tipo (el importe es el total)
+  // Por defecto: el importe es el total con IVA incluido
   const amountIncludesVat = input.amountIncludesVat !== false
   const breakdown = resolveVatAmounts({
     amount: input.amount,
@@ -113,8 +113,9 @@ interface FinanceContextValue {
 
 const FinanceContext = createContext<FinanceContextValue | null>(null)
 
-const TX_KEY = 'cb-operaciones-transactions-v13'
+const TX_KEY = 'cb-operaciones-transactions-v14'
 const TX_KEY_LEGACY = [
+  'cb-operaciones-transactions-v13',
   'cb-operaciones-transactions-v12',
   'cb-operaciones-transactions-v11',
   'cb-operaciones-transactions-v10',
@@ -137,7 +138,7 @@ function loadTransactions(): Transaction[] {
     /* ignore */
   }
 
-  // Recalcular: IVA = % del importe total (no ÷ 1,15 ni suma sobre base).
+  // Recalcular desglose: total conservado; IVA = total × tipo / (1 + tipo).
   for (const key of TX_KEY_LEGACY) {
     try {
       const legacy = localStorage.getItem(key)

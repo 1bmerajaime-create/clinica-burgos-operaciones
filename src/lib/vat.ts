@@ -45,8 +45,9 @@ export function normalizeVatRateFraction(rate: number): number {
 /**
  * Resuelve base / IVA / bruto.
  *
- * Modo total (por defecto): IVA = total × tipo · Base = total − IVA.
- *   (p.ej. 389,01 × 15 % = 58,35 · base 330,66)
+ * Modo total (por defecto, importe con IVA incluido):
+ *   Base = total / (1 + tipo) · IVA = total − base
+ *   (p.ej. 121 € al 21 % → base 100 · IVA 21)
  * Modo base: IVA = base × tipo · Total = base + IVA.
  */
 export function resolveVatAmounts(input: {
@@ -67,8 +68,8 @@ export function resolveVatAmounts(input: {
   }
 
   if (input.amountIncludesVat) {
-    const vatAmount = roundMoney(amount * vatRate)
-    const netAmount = roundMoney(amount - vatAmount)
+    const netAmount = roundMoney(amount / (1 + vatRate))
+    const vatAmount = roundMoney(amount - netAmount)
     return {
       netAmount,
       vatAmount,
@@ -84,8 +85,8 @@ export function resolveVatAmounts(input: {
 }
 
 /**
- * Recalcula tomando el importe del movimiento como TOTAL:
- * IVA = total × 15%/21% · Base = total − IVA.
+ * Recalcula tomando el importe del movimiento como TOTAL con IVA incluido.
+ * Conserva el total; recalcula base e IVA con la fórmula fiscal estándar.
  */
 export function reinterpretAsVatFromTotal(tx: Transaction): Transaction {
   const exempt = Boolean(tx.vatExempt) || tx.vatRate === 0
@@ -93,11 +94,15 @@ export function reinterpretAsVatFromTotal(tx: Transaction): Transaction {
     ? 0
     : normalizeVatRateFraction(tx.vatRate ?? defaultVatRateFor(tx.type))
 
-  // Lo tecleado / factura: si era modo base, netAmount; si ya era total, gross.
+  // Preferir el total bruto guardado; si no, el importe introducido.
   const totalFigure =
-    tx.amountIncludesVat === true
-      ? (tx.grossAmount ?? tx.amount)
-      : (tx.netAmount ?? tx.grossAmount ?? tx.amount)
+    tx.grossAmount ??
+    (tx.amountIncludesVat === false
+      ? roundMoney(
+          (tx.netAmount ?? tx.amount) *
+            (1 + (vatRate || 0)),
+        )
+      : tx.amount)
 
   const breakdown = resolveVatAmounts({
     amount: totalFigure,
@@ -156,7 +161,7 @@ function txBreakdown(tx: Transaction): VatBreakdown {
       vatRate: txVatRate(tx),
     }
   }
-  // Por defecto el importe es el total: IVA = total × tipo
+  // Por defecto el importe es el total con IVA incluido
   const includesVat = tx.amountIncludesVat !== false
   return resolveVatAmounts({
     amount: includesVat
@@ -268,26 +273,16 @@ export function normalizeVatTransaction<T extends {
     ? 0
     : normalizeVatRateFraction(tx.vatRate ?? defaultVatRateFor(tx.type))
 
-  // Por defecto el importe introducido es el total (IVA = total × tipo)
+  // Por defecto el importe introducido es el total con IVA incluido
   const amountIncludesVat = tx.amountIncludesVat !== false
 
-  const hasComplete =
-    tx.netAmount != null && tx.vatAmount != null && tx.grossAmount != null
-
-  const breakdown = hasComplete
-    ? {
-        netAmount: roundMoney(tx.netAmount!),
-        vatAmount: roundMoney(tx.vatAmount!),
-        grossAmount: roundMoney(tx.grossAmount!),
-        vatRate,
-      }
-    : resolveVatAmounts({
-        amount: amountIncludesVat
-          ? (tx.grossAmount ?? tx.amount)
-          : (tx.netAmount ?? tx.amount),
-        vatRate,
-        amountIncludesVat,
-      })
+  const breakdown = resolveVatAmounts({
+    amount: amountIncludesVat
+      ? (tx.grossAmount ?? tx.amount)
+      : (tx.netAmount ?? tx.amount),
+    vatRate,
+    amountIncludesVat,
+  })
 
   const deductible =
     tx.type === 'gasto'

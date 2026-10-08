@@ -52,7 +52,7 @@ export function TransactionFormModal({
     defaultSpecialtyId,
   )
   const [amount, setAmount] = useState('')
-  /** Por defecto el importe es el total: IVA = total × %. */
+  /** Por defecto el importe es el total con IVA incluido. */
   const [amountIncludesVat, setAmountIncludesVat] = useState(true)
   const [vatExempt, setVatExempt] = useState(false)
   const [vatRateInput, setVatRateInput] = useState(() =>
@@ -97,7 +97,7 @@ export function TransactionFormModal({
       setType(transaction.type)
       setAreaId(transaction.areaId)
       setSpecialtyId(transaction.specialtyId ?? '')
-      // Edición sobre el total (IVA = % del total)
+      // Edición sobre el total con IVA incluido
       setAmountIncludesVat(true)
       setAmount(
         String(
@@ -487,8 +487,8 @@ export function TransactionFormModal({
               />
               <p className="mt-1.5 text-[11px] text-ink-muted">
                 {type === 'ingreso'
-                  ? 'IVA = 15 % del total · Base = total − IVA.'
-                  : 'IVA = 21 % del total · Base = total − IVA.'}
+                  ? 'Total con IVA · Base = total ÷ 1,15 · IVA = total − base.'
+                  : 'Total con IVA · Base = total ÷ 1,21 · IVA = total − base.'}
               </p>
             </div>
             <div>
@@ -508,8 +508,8 @@ export function TransactionFormModal({
               Desglose IVA
             </p>
             <p className="text-[11px] leading-relaxed text-ink-muted">
-              El IVA es el 15 % (ingresos) o 21 % (gastos) del importe total.
-              Tipos provisionales, modificables abajo.
+              El importe es el total con IVA. Se desglosa la base y el IVA al
+              tipo indicado (15 % ingresos / 21 % gastos, modificables).
             </p>
 
             <label className="flex cursor-pointer items-start gap-2.5 text-sm text-ink">
