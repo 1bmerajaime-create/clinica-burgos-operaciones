@@ -263,8 +263,8 @@ export function sumAmountBreakdown(
 }
 
 /**
- * Posición IVA estimada.
- * Los balances de resultado usan bases sin IVA; el IVA no se trata como beneficio.
+ * Posición IVA estimada (repercutido − soportado deducible).
+ * Independiente de los totales de cards, que usan importe con IVA.
  */
 export function estimateVatPosition(transactions: Transaction[]): VatEstimate {
   let incomeBase = 0

@@ -1,6 +1,11 @@
 import type { AreaId, MonthlyPoint, SpecialtyId, Transaction } from '../types'
 import { formatMonthLabel } from './format'
 
+/** Total del movimiento con IVA incluido (fallback a amount). */
+function grossOf(t: Transaction): number {
+  return t.grossAmount ?? t.amount
+}
+
 export function sumByType(
   transactions: Transaction[],
   type: 'ingreso' | 'gasto' | 'devolucion',
@@ -14,10 +19,10 @@ export function sumByType(
         (!areaId || t.areaId === areaId) &&
         (!specialtyId || t.specialtyId === specialtyId),
     )
-    .reduce((acc, t) => acc + t.amount, 0)
+    .reduce((acc, t) => acc + grossOf(t), 0)
 }
 
-/** Ingresos menos devoluciones (base imponible). */
+/** Ingresos menos devoluciones (totales con IVA). */
 export function sumNetIngresos(
   transactions: Transaction[],
   areaId?: AreaId,
@@ -33,9 +38,10 @@ function accumulateBySide(
   t: Transaction,
   current: { ingresos: number; gastos: number },
 ) {
-  if (t.type === 'ingreso') current.ingresos += t.amount
-  else if (t.type === 'devolucion') current.ingresos -= t.amount
-  else current.gastos += t.amount
+  const gross = grossOf(t)
+  if (t.type === 'ingreso') current.ingresos += gross
+  else if (t.type === 'devolucion') current.ingresos -= gross
+  else current.gastos += gross
 }
 
 export function filterByArea(
@@ -320,7 +326,7 @@ export function sumForMonth(
   return transactions
     .filter((t) => t.date.startsWith(monthKey))
     .filter((t) => (!type || t.type === type) && (!areaId || t.areaId === areaId))
-    .reduce((acc, t) => acc + t.amount, 0)
+    .reduce((acc, t) => acc + grossOf(t), 0)
 }
 
 export type CompareMode = 'month' | 'year'

@@ -29,15 +29,15 @@ export interface Transaction {
   areaId: AreaId
   specialtyId?: SpecialtyId
   /**
-   * Base imponible (sin IVA). Es el importe usado en balances de
-   * ingresos/gastos para no tratar el IVA como beneficio.
+   * Base imponible (sin IVA). Los totales de cards/gráficos usan
+   * `grossAmount` (total con IVA) cuando está disponible.
    */
   amount: number
   /** Base imponible (sin IVA) */
   netAmount?: number
   /** Cuota de IVA */
   vatAmount?: number
-  /** Total con IVA */
+  /** Total con IVA (usado en totales de cards y gráficos) */
   grossAmount?: number
   /**
    * Tipo IVA aplicado (fracción, p.ej. 0.15).

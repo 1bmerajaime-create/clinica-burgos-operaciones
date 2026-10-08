@@ -280,9 +280,9 @@ export function Dashboard() {
         size="xl"
       >
         <p className="mb-5 max-w-2xl text-[12px] leading-relaxed text-ink-muted">
-          Los balances de clínica usan bases sin IVA. El resultado estimado es
-          repercutido menos soportado deducible (tipos provisionales). Filtrado
-          por el periodo seleccionado.
+          Los totales de las cards usan el importe con IVA. El resultado IVA
+          estimado es repercutido menos soportado deducible (tipos
+          provisionales). Filtrado por el periodo seleccionado.
         </p>
 
         <div className="mb-5 rounded-2xl border border-sand/70 bg-cream-dark/40 px-4 py-3">

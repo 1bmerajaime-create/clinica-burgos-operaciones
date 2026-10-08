@@ -184,7 +184,7 @@ export function BranchDetail() {
       {area.hasSpecialty && (
         <Card className="animate-fade-up-delay-2">
           <SectionTitle eyebrow="Desglose" title="Por especialidad" />
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             {SPECIALTIES.map((spec) => {
               const stats = bySpecialty.find((s) => s.specialtyId === spec.id)!
               return (
