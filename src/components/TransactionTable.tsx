@@ -19,6 +19,10 @@ interface Props {
 }
 
 function AmountBlock({ t }: { t: Transaction }) {
+  const total = t.grossAmount ?? t.amount
+  const base = t.netAmount ?? t.amount
+  const exempt = Boolean(t.vatExempt) || t.vatRate === 0
+
   return (
     <div
       className={`flex flex-col gap-0.5 font-medium tabular-nums ${
@@ -27,23 +31,28 @@ function AmountBlock({ t }: { t: Transaction }) {
     >
       <span>
         {t.type === 'gasto' ? '−' : '+'}
-        {formatCurrencyPrecise(t.netAmount ?? t.amount)}
+        {formatCurrencyPrecise(total)}
         <span className="ml-1 text-[10px] font-normal uppercase tracking-[0.08em] text-ink-muted">
-          base
+          total
         </span>
       </span>
-      <span className="text-[11px] font-normal text-ink-muted">
-        {t.vatExempt || t.vatRate === 0
-          ? 'Exento'
-          : `IVA ${formatCurrencyPrecise(t.vatAmount ?? 0)}`}
-        {t.grossAmount != null &&
-          ` · Total ${formatCurrencyPrecise(t.grossAmount)}`}
-        {t.type === 'gasto' &&
-          t.vatAmount != null &&
-          t.vatAmount > 0 &&
-          t.vatDeductible === false &&
-          ' · No deducible'}
-      </span>
+      <div className="flex flex-col gap-0.5 text-[11px] font-normal text-ink-muted">
+        <span className="whitespace-nowrap">
+          Base {formatCurrencyPrecise(base)}
+        </span>
+        {exempt ? (
+          <span>Exento</span>
+        ) : (
+          <span className="whitespace-nowrap">
+            IVA {formatCurrencyPrecise(t.vatAmount ?? 0)}
+            {t.type === 'gasto' &&
+              t.vatAmount != null &&
+              t.vatAmount > 0 &&
+              t.vatDeductible === false &&
+              ' · No deducible'}
+          </span>
+        )}
+      </div>
     </div>
   )
 }
@@ -95,55 +104,58 @@ export function TransactionTable({
   )
 
   const mobileList = (
-    <div className="divide-y divide-sand/50 md:hidden">
+    <div className="space-y-3 px-3 pb-4 md:hidden">
       {transactions.length === 0 && empty}
       {transactions.map((t) => (
-        <div key={t.id} className="px-4 py-4">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <TypeBadge type={t.type} />
-                <span className="text-xs text-ink-muted">
-                  {formatDate(t.date)}
+        <article
+          key={t.id}
+          className="rounded-2xl border border-sand/70 bg-cream-dark/30 px-3.5 py-3"
+        >
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex min-w-0 items-center gap-2">
+              <TypeBadge type={t.type} />
+              <span className="truncate text-xs text-ink-muted">
+                {formatDate(t.date)}
+              </span>
+              {t.invoiceFileName && (
+                <span title={t.invoiceFileName} className="shrink-0 text-brass">
+                  <Paperclip size={14} />
                 </span>
-                {t.invoiceFileName && (
-                  <span title={t.invoiceFileName} className="text-brass">
-                    <Paperclip size={14} />
-                  </span>
-                )}
-              </div>
-              <p className="mt-1.5 text-sm text-ink">{t.description}</p>
-              {showArea && (
-                <p className="mt-0.5 text-[11px] text-ink-muted">{rowMeta(t)}</p>
               )}
             </div>
-            <div className="shrink-0 text-right">
-              <AmountBlock t={t} />
-            </div>
+            {editable && (
+              <div className="flex shrink-0 gap-1">
+                <button
+                  type="button"
+                  onClick={() => setEditing(t)}
+                  className="flex h-8 w-8 items-center justify-center rounded-full border border-ink/10 text-ink-soft transition hover:border-ink/30 hover:bg-cream hover:text-ink"
+                  title="Editar"
+                  aria-label="Editar movimiento"
+                >
+                  <Pencil size={14} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDelete(t)}
+                  className="flex h-8 w-8 items-center justify-center rounded-full border border-ink/10 text-ink-soft transition hover:border-rose/40 hover:bg-rose/10 hover:text-rose"
+                  title="Eliminar"
+                  aria-label="Eliminar movimiento"
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            )}
           </div>
-          {editable && (
-            <div className="mt-3 flex justify-end gap-1">
-              <button
-                type="button"
-                onClick={() => setEditing(t)}
-                className="flex h-8 w-8 items-center justify-center rounded-full border border-ink/10 text-ink-soft transition hover:border-ink/30 hover:bg-cream hover:text-ink"
-                title="Editar"
-                aria-label="Editar movimiento"
-              >
-                <Pencil size={14} />
-              </button>
-              <button
-                type="button"
-                onClick={() => handleDelete(t)}
-                className="flex h-8 w-8 items-center justify-center rounded-full border border-ink/10 text-ink-soft transition hover:border-rose/40 hover:bg-rose/10 hover:text-rose"
-                title="Eliminar"
-                aria-label="Eliminar movimiento"
-              >
-                <Trash2 size={14} />
-              </button>
-            </div>
+
+          <p className="mt-2 text-sm leading-snug text-ink">{t.description}</p>
+          {showArea && (
+            <p className="mt-1 text-[11px] text-ink-muted">{rowMeta(t)}</p>
           )}
-        </div>
+
+          <div className="mt-3 border-t border-sand/60 pt-2.5">
+            <AmountBlock t={t} />
+          </div>
+        </article>
       ))}
     </div>
   )

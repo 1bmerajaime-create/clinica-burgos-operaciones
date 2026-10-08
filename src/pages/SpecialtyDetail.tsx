@@ -3,10 +3,11 @@ import { useMemo, useState, type ReactNode } from 'react'
 import { Link, Navigate, useParams } from 'react-router-dom'
 import { FinanceChart } from '../components/FinanceChart'
 import { ProductsSection } from '../components/ProductsSection'
+import { MoneyBreakdown } from '../components/MoneyBreakdown'
 import { SignedAmount } from '../components/SignedAmount'
 import { TransactionFormModal } from '../components/TransactionFormModal'
 import { TransactionTable } from '../components/TransactionTable'
-import { Button, Card, Modal } from '../components/ui'
+import { Button, Card, Dialog } from '../components/ui'
 import { useFinance } from '../context/FinanceContext'
 import { getArea, getSpecialty } from '../data/areas'
 import {
@@ -14,6 +15,7 @@ import {
   filterBySpecialty,
   sumByType,
 } from '../lib/analytics'
+import { sumAmountBreakdown } from '../lib/vat'
 import type { AreaId, SpecialtyId, TransactionType } from '../types'
 
 function StatCardShell({
@@ -95,6 +97,15 @@ export function SpecialtyDetail() {
     [transactions, id, specId],
   )
 
+  const incomeBreakdown = useMemo(
+    () => sumAmountBreakdown(specialtyTransactions, 'ingreso'),
+    [specialtyTransactions],
+  )
+  const expenseBreakdown = useMemo(
+    () => sumAmountBreakdown(specialtyTransactions, 'gasto'),
+    [specialtyTransactions],
+  )
+
   const listTransactions = useMemo(() => {
     if (!listType) return []
     return specialtyTransactions.filter((t) => t.type === listType)
@@ -139,7 +150,12 @@ export function SpecialtyDetail() {
           interactive
           onClick={() => setListType('ingreso')}
           amount={
-            <SignedAmount value={ingresos} kind="income" forceSign="+" size="lg" />
+            <MoneyBreakdown
+              kind="income"
+              total={incomeBreakdown.total}
+              vat={incomeBreakdown.vat}
+              base={incomeBreakdown.base}
+            />
           }
         />
         <StatCardShell
@@ -147,7 +163,12 @@ export function SpecialtyDetail() {
           interactive
           onClick={() => setListType('gasto')}
           amount={
-            <SignedAmount value={gastos} kind="expense" forceSign="−" size="lg" />
+            <MoneyBreakdown
+              kind="expense"
+              total={expenseBreakdown.total}
+              vat={expenseBreakdown.vat}
+              base={expenseBreakdown.base}
+            />
           }
         />
       </section>
@@ -167,7 +188,7 @@ export function SpecialtyDetail() {
         eyebrow="Histórico"
       />
 
-      <Modal
+      <Dialog
         open={Boolean(listType)}
         onClose={() => setListType(null)}
         title={
@@ -190,7 +211,7 @@ export function SpecialtyDetail() {
           showArea={false}
           bare
         />
-      </Modal>
+      </Dialog>
 
       <TransactionFormModal
         open={movementOpen}

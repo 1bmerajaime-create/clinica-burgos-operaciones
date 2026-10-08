@@ -10,7 +10,7 @@ import {
   sentimentClass,
 } from '../lib/format'
 import type { AestheticProduct, AreaId } from '../types'
-import { Button, Card, Input, Label, Modal, SectionTitle, Textarea } from './ui'
+import { Button, Card, Dialog, Input, Label, SectionTitle, Textarea } from './ui'
 import { SignedAmount } from './SignedAmount'
 
 interface Props {
@@ -207,7 +207,7 @@ export function ProductsSection({ areaId }: Props) {
         </div>
       )}
 
-      <Modal
+      <Dialog
         open={salesOpen}
         onClose={() => setSalesOpen(false)}
         title="Total ventas"
@@ -273,7 +273,7 @@ export function ProductsSection({ areaId }: Props) {
             </table>
           </div>
         )}
-      </Modal>
+      </Dialog>
 
       {modal?.type === 'product' && (
         <ProductFormModal
@@ -363,7 +363,7 @@ function ProductFormModal({
   }
 
   return (
-    <Modal
+    <Dialog
       open={open}
       onClose={onClose}
       title={product ? 'Editar producto' : 'Nuevo producto'}
@@ -436,7 +436,7 @@ function ProductFormModal({
           <Button type="submit">Guardar</Button>
         </div>
       </form>
-    </Modal>
+    </Dialog>
   )
 }
 
@@ -463,7 +463,7 @@ function RestockModal({
   }
 
   return (
-    <Modal open={open} onClose={onClose} title={`Reponer · ${product.name}`}>
+    <Dialog open={open} onClose={onClose} title={`Reponer · ${product.name}`}>
       <form onSubmit={handleSubmit} className="space-y-4">
         <p className="text-sm text-ink-soft">
           Stock actual: <strong className="text-ink">{product.stock}</strong>
@@ -494,7 +494,7 @@ function RestockModal({
           <Button type="submit">Reponer</Button>
         </div>
       </form>
-    </Modal>
+    </Dialog>
   )
 }
 
@@ -540,7 +540,7 @@ function SellModal({
   }
 
   return (
-    <Modal open={open} onClose={onClose} title={`Venta · ${product.name}`}>
+    <Dialog open={open} onClose={onClose} title={`Venta · ${product.name}`}>
       <form onSubmit={handleSubmit} className="space-y-4">
         <p className="text-sm text-ink-soft">
           Disponible: <strong className="text-ink">{product.stock}</strong> ·
@@ -623,6 +623,6 @@ function SellModal({
           </Button>
         </div>
       </form>
-    </Modal>
+    </Dialog>
   )
 }

@@ -19,7 +19,7 @@ import {
 } from '../lib/analytics'
 import { formatCurrencyPrecise } from '../lib/format'
 import type { AreaId, SpecialtyId, Transaction } from '../types'
-import { BottomSheet, Button, Card, Label, Select } from './ui'
+import { Button, Card, Dialog, Label, Select } from './ui'
 
 const INCOME_COLOR = '#5F8F5A'
 const EXPENSE_COLOR = '#C45C5C'
@@ -377,7 +377,7 @@ export function FinanceChart({
         </div>
       </div>
 
-      <BottomSheet
+      <Dialog
         open={filtersOpen}
         onClose={() => setFiltersOpen(false)}
         title="Filtros del gráfico"
@@ -392,7 +392,7 @@ export function FinanceChart({
         }
       >
         <div className="space-y-4">{filterFields}</div>
-      </BottomSheet>
+      </Dialog>
 
       <div className="h-[260px] w-full min-w-0 sm:h-[320px] md:h-[400px]">
         {data.length === 0 ? (

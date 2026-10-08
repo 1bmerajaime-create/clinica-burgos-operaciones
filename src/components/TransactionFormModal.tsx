@@ -14,7 +14,7 @@ import type {
   Transaction,
   TransactionType,
 } from '../types'
-import { Button, Input, Label, Modal, Select, Textarea } from './ui'
+import { Button, Dialog, Input, Label, Select, Textarea } from './ui'
 
 interface Props {
   open: boolean
@@ -46,7 +46,8 @@ export function TransactionFormModal({
     defaultSpecialtyId,
   )
   const [amount, setAmount] = useState('')
-  const [amountIncludesVat, setAmountIncludesVat] = useState(false)
+  /** Por defecto el importe es el total; se puede pasar a base. */
+  const [amountIncludesVat, setAmountIncludesVat] = useState(true)
   const [vatExempt, setVatExempt] = useState(false)
   const [vatRateInput, setVatRateInput] = useState(() =>
     rateToInput(defaultVatRateFor(typeProp)),
@@ -86,13 +87,13 @@ export function TransactionFormModal({
       setType(transaction.type)
       setAreaId(transaction.areaId)
       setSpecialtyId(transaction.specialtyId ?? '')
-      const includes = Boolean(transaction.amountIncludesVat)
-      setAmountIncludesVat(includes)
+      // Edición: se trabaja sobre el total (modificable a base si hace falta)
+      setAmountIncludesVat(true)
       setAmount(
         String(
-          includes
-            ? (transaction.grossAmount ?? transaction.amount)
-            : (transaction.netAmount ?? transaction.amount),
+          transaction.grossAmount ??
+            transaction.netAmount ??
+            transaction.amount,
         ),
       )
       const exempt = Boolean(transaction.vatExempt) || transaction.vatRate === 0
@@ -121,7 +122,7 @@ export function TransactionFormModal({
       areaNeedsSpecialty(defaultAreaId) ? defaultSpecialtyId : '',
     )
     setAmount('')
-    setAmountIncludesVat(false)
+    setAmountIncludesVat(true)
     setVatExempt(false)
     setVatRateInput(rateToInput(defaultVatRateFor(typeProp)))
     setVatDeductible(true)
@@ -256,7 +257,7 @@ export function TransactionFormModal({
   }
 
   return (
-    <Modal open={open} onClose={handleClose} title={title} elevated>
+    <Dialog open={open} onClose={handleClose} title={title} elevated>
       {saved ? (
         <div className="py-8 text-center animate-fade-up">
           <p className="font-display text-2xl text-ink">
@@ -382,6 +383,13 @@ export function TransactionFormModal({
                 onChange={(e) => setAmount(e.target.value)}
                 required
               />
+              <p className="mt-1.5 text-[11px] text-ink-muted">
+                {amountIncludesVat
+                  ? type === 'ingreso'
+                    ? 'Se desglosa con IVA 15 % (modificable).'
+                    : 'Se desglosa con IVA 21 % (modificable).'
+                  : 'Se calculará el IVA sobre esta base.'}
+              </p>
             </div>
             <div>
               <Label htmlFor="date">Fecha</Label>
@@ -397,11 +405,11 @@ export function TransactionFormModal({
 
           <div className="space-y-3 rounded-2xl border border-sand/80 bg-cream-dark/50 px-4 py-3">
             <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-ink-muted">
-              IVA (tipos provisionales)
+              Desglose IVA
             </p>
             <p className="text-[11px] leading-relaxed text-ink-muted">
-              Los porcentajes son configurables y pendientes de validación
-              fiscal con la asesoría. No son un tipo legal validado.
+              Ingresos 15 % · Gastos 21 % por defecto. Tipos provisionales,
+              configurables y pendientes de validación fiscal.
             </p>
 
             <label className="flex cursor-pointer items-start gap-2.5 text-sm text-ink">
@@ -411,7 +419,7 @@ export function TransactionFormModal({
                 checked={amountIncludesVat}
                 onChange={(e) => setAmountIncludesVat(e.target.checked)}
               />
-              <span>El importe incluye IVA</span>
+              <span>El importe es el total (incluye IVA)</span>
             </label>
 
             <label className="flex cursor-pointer items-start gap-2.5 text-sm text-ink">
@@ -453,10 +461,10 @@ export function TransactionFormModal({
 
             <dl className="space-y-1.5 border-t border-sand/70 pt-3 text-sm">
               <div className="flex items-center justify-between gap-4">
-                <dt className="text-ink-soft">Base (sin IVA)</dt>
-                <dd className="tabular-nums text-ink">
+                <dt className="font-medium text-ink">Total</dt>
+                <dd className="font-medium tabular-nums text-ink">
                   {vatBreakdown
-                    ? formatCurrencyPrecise(vatBreakdown.netAmount)
+                    ? formatCurrencyPrecise(vatBreakdown.grossAmount)
                     : '—'}
                 </dd>
               </div>
@@ -483,11 +491,11 @@ export function TransactionFormModal({
                   </dd>
                 </div>
               )}
-              <div className="flex items-center justify-between gap-4 border-t border-sand/70 pt-1.5">
-                <dt className="font-medium text-ink">Total</dt>
-                <dd className="font-medium tabular-nums text-ink">
+              <div className="flex items-center justify-between gap-4">
+                <dt className="text-ink-soft">Base (sin IVA)</dt>
+                <dd className="tabular-nums text-ink">
                   {vatBreakdown
-                    ? formatCurrencyPrecise(vatBreakdown.grossAmount)
+                    ? formatCurrencyPrecise(vatBreakdown.netAmount)
                     : '—'}
                 </dd>
               </div>
@@ -519,6 +527,6 @@ export function TransactionFormModal({
           </div>
         </form>
       )}
-    </Modal>
+    </Dialog>
   )
 }

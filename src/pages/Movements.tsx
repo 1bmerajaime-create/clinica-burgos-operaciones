@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { SlidersHorizontal } from 'lucide-react'
 import { TransactionTable } from '../components/TransactionTable'
-import { BottomSheet, Button, Select } from '../components/ui'
+import { Button, Dialog, Select } from '../components/ui'
 import { useFinance } from '../context/FinanceContext'
 import { AREAS, SPECIALTIES } from '../data/areas'
 import type { AreaId, SpecialtyId, TransactionType } from '../types'
@@ -131,7 +131,7 @@ export function Movements() {
         </p>
       </div>
 
-      <BottomSheet
+      <Dialog
         open={filtersOpen}
         onClose={() => setFiltersOpen(false)}
         title="Filtros"
@@ -147,7 +147,7 @@ export function Movements() {
         }
       >
         <div className="space-y-4">{filterFields}</div>
-      </BottomSheet>
+      </Dialog>
 
       <TransactionTable
         transactions={filtered}

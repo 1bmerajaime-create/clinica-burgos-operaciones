@@ -147,6 +147,28 @@ export interface VatEstimate {
   resultado: number
 }
 
+/** Suma base / IVA / total de un conjunto de movimientos (un tipo). */
+export function sumAmountBreakdown(
+  transactions: Transaction[],
+  type: TransactionType,
+): { base: number; vat: number; total: number } {
+  let base = 0
+  let vat = 0
+  let total = 0
+  for (const tx of transactions) {
+    if (tx.type !== type) continue
+    const b = txBreakdown(tx)
+    base += b.netAmount
+    vat += b.vatAmount
+    total += b.grossAmount
+  }
+  return {
+    base: roundMoney(base),
+    vat: roundMoney(vat),
+    total: roundMoney(total),
+  }
+}
+
 /**
  * Posición IVA estimada.
  * Los balances de resultado usan bases sin IVA; el IVA no se trata como beneficio.

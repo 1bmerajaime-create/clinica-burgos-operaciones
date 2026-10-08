@@ -2,10 +2,11 @@ import { ArrowLeft, ArrowUpRight, Plus } from 'lucide-react'
 import { useMemo, useState, type ReactNode } from 'react'
 import { Link, Navigate, useParams } from 'react-router-dom'
 import { FinanceChart } from '../components/FinanceChart'
+import { MoneyBreakdown } from '../components/MoneyBreakdown'
 import { SignedAmount } from '../components/SignedAmount'
 import { TransactionFormModal } from '../components/TransactionFormModal'
 import { TransactionTable } from '../components/TransactionTable'
-import { Button, Card, Modal, SectionTitle } from '../components/ui'
+import { Button, Card, Dialog, SectionTitle } from '../components/ui'
 import { useFinance } from '../context/FinanceContext'
 import { SPECIALTIES, getArea } from '../data/areas'
 import {
@@ -14,6 +15,7 @@ import {
   sumByType,
 } from '../lib/analytics'
 import { formatCurrency, formatSignedCurrency, sentimentClass } from '../lib/format'
+import { sumAmountBreakdown } from '../lib/vat'
 import type { AreaId, TransactionType } from '../types'
 
 function StatCardShell({
@@ -94,6 +96,15 @@ export function BranchDetail() {
     [transactions, id],
   )
 
+  const incomeBreakdown = useMemo(
+    () => sumAmountBreakdown(areaTransactions, 'ingreso'),
+    [areaTransactions],
+  )
+  const expenseBreakdown = useMemo(
+    () => sumAmountBreakdown(areaTransactions, 'gasto'),
+    [areaTransactions],
+  )
+
   const listTransactions = useMemo(() => {
     if (!listType) return []
     return areaTransactions.filter((t) => t.type === listType)
@@ -134,7 +145,12 @@ export function BranchDetail() {
           interactive
           onClick={() => setListType('ingreso')}
           amount={
-            <SignedAmount value={ingresos} kind="income" forceSign="+" size="lg" />
+            <MoneyBreakdown
+              kind="income"
+              total={incomeBreakdown.total}
+              vat={incomeBreakdown.vat}
+              base={incomeBreakdown.base}
+            />
           }
         />
 
@@ -143,7 +159,12 @@ export function BranchDetail() {
           interactive
           onClick={() => setListType('gasto')}
           amount={
-            <SignedAmount value={gastos} kind="expense" forceSign="−" size="lg" />
+            <MoneyBreakdown
+              kind="expense"
+              total={expenseBreakdown.total}
+              vat={expenseBreakdown.vat}
+              base={expenseBreakdown.base}
+            />
           }
         />
       </section>
@@ -197,7 +218,7 @@ export function BranchDetail() {
         eyebrow="Histórico"
       />
 
-      <Modal
+      <Dialog
         open={Boolean(listType)}
         onClose={() => setListType(null)}
         title={
@@ -220,7 +241,7 @@ export function BranchDetail() {
           showArea={false}
           bare
         />
-      </Modal>
+      </Dialog>
 
       <TransactionFormModal
         open={movementOpen}

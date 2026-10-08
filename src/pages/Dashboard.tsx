@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom'
 import { FinanceChart } from '../components/FinanceChart'
 import { SignedAmount } from '../components/SignedAmount'
 import { TransactionTable } from '../components/TransactionTable'
-import { Card, Modal } from '../components/ui'
+import { Card, Dialog } from '../components/ui'
 import { useFinance } from '../context/FinanceContext'
 import { getArea } from '../data/areas'
 import { areaBreakdown, recentTransactions } from '../lib/analytics'
@@ -87,57 +87,73 @@ export function Dashboard() {
   ] as const
 
   return (
-    <div className="space-y-8">
-      <section className="grid grid-cols-3 gap-2 sm:gap-4">
+    <div className="space-y-6 sm:space-y-8">
+      <section className="grid grid-cols-1 gap-3 md:grid-cols-3 md:gap-4">
         {cards.map((item, i) => {
           const interactive = Boolean(item.href || item.onOpen)
           const content = (
             <Card
-              className={`h-full min-w-0 !p-3 sm:!p-5 md:!p-6 ${
+              className={`h-full min-w-0 !p-4 md:!p-6 ${
                 interactive
                   ? 'transition duration-300 group-hover:-translate-y-1 group-hover:shadow-[0_16px_40px_rgba(45,41,38,0.08)]'
                   : ''
               }`}
             >
-              <div className="flex h-full flex-col text-left">
-                <div className="mb-3 flex min-h-7 items-start justify-between gap-2 sm:mb-4 sm:min-h-8 sm:gap-3">
-                  <p className="pt-1 text-[9px] font-medium uppercase tracking-[0.14em] text-ink-muted sm:pt-1.5 sm:text-[10px] sm:tracking-[0.16em]">
-                    {item.label}
-                  </p>
-                  {interactive ? (
-                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-ink/15 text-ink transition group-hover:bg-ink group-hover:text-cream sm:h-8 sm:w-8">
-                      <ArrowUpRight size={14} />
-                    </span>
-                  ) : (
-                    <span
-                      className="h-7 w-7 shrink-0 sm:h-8 sm:w-8"
-                      aria-hidden
-                    />
-                  )}
-                </div>
-
-                <div className="flex min-w-0 flex-col items-stretch gap-1.5 sm:gap-2">
-                  <SignedAmount
-                    value={item.value}
-                    kind={item.resultKind}
-                    size="lg"
-                  />
-
-                  <div className="flex min-w-0 flex-col gap-0.5 text-[10px] sm:flex-row sm:flex-wrap sm:items-baseline sm:gap-x-4 sm:gap-y-1 sm:text-xs">
-                    <span className="inline-flex min-w-0 items-baseline gap-1 sm:gap-1.5">
-                      <span className="shrink-0 text-ink-muted">
-                        {item.primaryLabel}
+              {/* Móvil: fila horizontal; tablet+: columna como antes */}
+              <div className="flex items-center gap-3 text-left md:h-full md:flex-col md:items-stretch md:gap-0">
+                <div className="min-w-0 flex-1 md:flex md:h-full md:flex-col">
+                  <div className="mb-0 flex items-start justify-between gap-2 md:mb-4 md:min-h-8">
+                    <p className="text-[10px] font-medium uppercase tracking-[0.14em] text-ink-muted md:pt-1.5 md:tracking-[0.16em]">
+                      {item.label}
+                    </p>
+                    {interactive ? (
+                      <span className="hidden h-8 w-8 shrink-0 items-center justify-center rounded-full border border-ink/15 text-ink transition group-hover:bg-ink group-hover:text-cream md:flex">
+                        <ArrowUpRight size={14} />
                       </span>
+                    ) : (
+                      <span className="hidden h-8 w-8 shrink-0 md:block" aria-hidden />
+                    )}
+                  </div>
+
+                  <div className="mt-2 hidden flex-col gap-2 md:flex">
+                    <SignedAmount
+                      value={item.value}
+                      kind={item.resultKind}
+                      size="lg"
+                    />
+                    <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1 text-xs">
+                      <span className="inline-flex items-baseline gap-1.5">
+                        <span className="text-ink-muted">{item.primaryLabel}</span>
+                        <SignedAmount
+                          value={item.primaryValue}
+                          kind={item.primaryKind}
+                          forceSign="+"
+                        />
+                      </span>
+                      <span className="inline-flex items-baseline gap-1.5">
+                        <span className="text-ink-muted">
+                          {item.secondaryLabel}
+                        </span>
+                        <SignedAmount
+                          value={item.secondaryValue}
+                          kind={item.secondaryKind}
+                          forceSign="−"
+                        />
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="mt-1.5 flex flex-wrap items-baseline gap-x-3 gap-y-0.5 text-[11px] md:hidden">
+                    <span className="inline-flex items-baseline gap-1">
+                      <span className="text-ink-muted">{item.primaryLabel}</span>
                       <SignedAmount
                         value={item.primaryValue}
                         kind={item.primaryKind}
                         forceSign="+"
                       />
                     </span>
-                    <span className="inline-flex min-w-0 items-baseline gap-1 sm:gap-1.5">
-                      <span className="shrink-0 text-ink-muted">
-                        {item.secondaryLabel}
-                      </span>
+                    <span className="inline-flex items-baseline gap-1">
+                      <span className="text-ink-muted">{item.secondaryLabel}</span>
                       <SignedAmount
                         value={item.secondaryValue}
                         kind={item.secondaryKind}
@@ -145,6 +161,19 @@ export function Dashboard() {
                       />
                     </span>
                   </div>
+                </div>
+
+                <div className="flex shrink-0 items-center gap-2 md:hidden">
+                  <SignedAmount
+                    value={item.value}
+                    kind={item.resultKind}
+                    size="lg"
+                  />
+                  {interactive && (
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-ink/15 text-ink">
+                      <ArrowUpRight size={14} />
+                    </span>
+                  )}
                 </div>
               </div>
             </Card>
@@ -185,7 +214,7 @@ export function Dashboard() {
         })}
       </section>
 
-      <Modal
+      <Dialog
         open={vatOpen}
         onClose={() => setVatOpen(false)}
         eyebrow="Detalle IVA"
@@ -223,7 +252,7 @@ export function Dashboard() {
             </div>
           ))}
         </dl>
-      </Modal>
+      </Dialog>
 
       <FinanceChart transactions={transactions} />
 
