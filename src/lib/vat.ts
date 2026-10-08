@@ -76,9 +76,8 @@ export function normalizeVatRateFraction(rate: number): number {
 /**
  * Resuelve base / IVA / bruto.
  *
- * Modo total (por defecto, importe con IVA incluido):
- *   Base = total / (1 + tipo) · IVA = total − base
- *   (p.ej. 121 € al 21 % → base 100 · IVA 21)
+ * Modo total (por defecto): IVA = total × tipo · Base = total − IVA.
+ *   (p.ej. 389,01 × 21 % = 81,69 · base 307,32)
  * Modo base: IVA = base × tipo · Total = base + IVA.
  */
 export function resolveVatAmounts(input: {
@@ -99,8 +98,8 @@ export function resolveVatAmounts(input: {
   }
 
   if (input.amountIncludesVat) {
-    const netAmount = roundMoney(amount / (1 + vatRate))
-    const vatAmount = roundMoney(amount - netAmount)
+    const vatAmount = roundMoney(amount * vatRate)
+    const netAmount = roundMoney(amount - vatAmount)
     return {
       netAmount,
       vatAmount,
@@ -116,8 +115,8 @@ export function resolveVatAmounts(input: {
 }
 
 /**
- * Recalcula tomando el importe del movimiento como TOTAL con IVA incluido.
- * Conserva el total; recalcula base e IVA con la fórmula fiscal estándar.
+ * Recalcula tomando el importe del movimiento como TOTAL.
+ * Conserva el total; IVA = total × tipo · Base = total − IVA.
  */
 export function reinterpretAsVatFromTotal(tx: Transaction): Transaction {
   const exempt = Boolean(tx.vatExempt) || tx.vatRate === 0

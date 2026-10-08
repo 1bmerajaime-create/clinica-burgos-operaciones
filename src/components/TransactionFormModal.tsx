@@ -540,7 +540,7 @@ export function TransactionFormModal({
               <p className="mt-1.5 text-[11px] text-ink-muted">
                 {vatExempt
                   ? 'Operación exenta: el importe se registra sin IVA.'
-                  : `Total con IVA · Base = total ÷ ${(1 + parsedRate).toFixed(2).replace('.', ',')} · IVA = total − base.`}
+                  : `IVA = ${formatVatPercent(parsedRate)} % del total · Base = total − IVA.`}
               </p>
             </div>
             <div>

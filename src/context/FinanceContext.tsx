@@ -113,8 +113,9 @@ interface FinanceContextValue {
 
 const FinanceContext = createContext<FinanceContextValue | null>(null)
 
-const TX_KEY = 'cb-operaciones-transactions-v14'
+const TX_KEY = 'cb-operaciones-transactions-v15'
 const TX_KEY_LEGACY = [
+  'cb-operaciones-transactions-v14',
   'cb-operaciones-transactions-v13',
   'cb-operaciones-transactions-v12',
   'cb-operaciones-transactions-v11',
@@ -138,7 +139,7 @@ function loadTransactions(): Transaction[] {
     /* ignore */
   }
 
-  // Recalcular desglose: total conservado; IVA = total × tipo / (1 + tipo).
+  // Recalcular desglose: total conservado; IVA = total × tipo.
   for (const key of TX_KEY_LEGACY) {
     try {
       const legacy = localStorage.getItem(key)
