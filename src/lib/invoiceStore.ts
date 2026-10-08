@@ -104,11 +104,13 @@ export function downloadBlob(blob: Blob, fileName: string) {
   const a = document.createElement('a')
   a.href = url
   a.download = fileName
+  a.target = '_blank'
   a.rel = 'noopener'
   document.body.appendChild(a)
   a.click()
   a.remove()
-  URL.revokeObjectURL(url)
+  // iOS necesita tiempo antes de revocar el blob URL.
+  window.setTimeout(() => URL.revokeObjectURL(url), 2500)
 }
 
 export function isImageMime(mime: string) {

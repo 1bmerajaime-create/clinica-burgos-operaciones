@@ -4,10 +4,8 @@ import { AREAS, MOVEMENT_AREAS, SPECIALTIES } from '../data/areas'
 import { useFinance } from '../context/FinanceContext'
 import { extractInvoiceFields } from '../lib/invoiceOcr'
 import { formatCurrencyPrecise } from '../lib/format'
-import {
-  downloadBlob,
-  getInvoiceFile,
-} from '../lib/invoiceStore'
+import { ensureInvoiceLocal } from '../lib/invoiceCloud'
+import { downloadBlob } from '../lib/invoiceStore'
 import {
   defaultIrpfSettings,
   defaultVatRateFor,
@@ -344,13 +342,15 @@ export function TransactionFormModal({
       return
     }
     if (!transaction?.id) return
-    const stored = await getInvoiceFile(transaction.id)
+    setScanNote('Descargando factura…')
+    const stored = await ensureInvoiceLocal(transaction.id)
     if (!stored) {
       setScanNote(
-        'No hay archivo guardado para descargar. Vuelve a adjuntar la factura.',
+        'No hay archivo en este dispositivo ni en la nube. Vuelve a adjuntar la factura.',
       )
       return
     }
+    setScanNote('')
     downloadBlob(stored.blob, stored.fileName)
   }
 
@@ -445,21 +445,40 @@ export function TransactionFormModal({
             <Label htmlFor="invoice-file">Factura (opcional)</Label>
             <label
               htmlFor="invoice-file"
-              className={`flex cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-ink/20 bg-cream-dark/40 px-4 py-6 text-center transition hover:border-ink/40 hover:bg-cream-dark/70 ${
+              className={`flex cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-ink/20 bg-cream-dark/40 px-4 py-5 text-center transition hover:border-ink/40 hover:bg-cream-dark/70 ${
                 scanning ? 'pointer-events-none opacity-70' : ''
               }`}
             >
-              <span className="font-display text-lg text-ink">
-                {fileName || 'Adjuntar factura (JPG / PNG / PDF)'}
-              </span>
-              <span className="mt-1.5 text-xs text-ink-muted">
-                El concepto se rellena con el nombre del archivo; también
-                intentamos leer importe y fecha
-              </span>
+              {fileName ? (
+                <>
+                  <span className="text-sm font-medium text-ink">
+                    Factura adjunta
+                  </span>
+                  <span
+                    className="mt-1.5 max-w-full break-all px-1 text-[12px] leading-snug text-ink-soft"
+                    title={fileName}
+                  >
+                    {fileName}
+                  </span>
+                  <span className="mt-2 text-[11px] text-ink-muted">
+                    Toca para cambiar el archivo
+                  </span>
+                </>
+              ) : (
+                <>
+                  <span className="text-sm font-medium text-ink">
+                    Adjuntar factura
+                  </span>
+                  <span className="mt-1.5 max-w-sm text-xs leading-relaxed text-ink-muted">
+                    JPG, PNG o PDF. El concepto se rellena con el nombre; también
+                    intentamos leer importe y fecha.
+                  </span>
+                </>
+              )}
               <input
                 id="invoice-file"
                 type="file"
-                accept=".pdf,image/*"
+                accept=".pdf,image/*,application/pdf"
                 className="hidden"
                 disabled={scanning}
                 onChange={(e) => {

@@ -186,13 +186,17 @@ export async function pullMissingInvoices(
 ): Promise<void> {
   if (!(await ensureCloudSession())) return
   const storage = getFirebaseStorage()
+  const missing = transactions.filter((tx) => tx.invoiceFileName)
+  const CONCURRENCY = 3
 
-  for (const tx of transactions) {
-    if (!tx.invoiceFileName) continue
-    const local = await getInvoiceFile(tx.id)
-    if (local) continue
+  async function pullOne(tx: Transaction) {
+    try {
+      const local = await getInvoiceFile(tx.id)
+      if (local?.blob && local.blob.size > 0) return
+    } catch {
+      /* seguir a la nube */
+    }
 
-    // 1) Firestore (plan Spark, sin Storage)
     try {
       const fromFs = await pullInvoiceFromFirestore(tx.id)
       if (fromFs) {
@@ -202,19 +206,18 @@ export async function pullMissingInvoices(
           fromFs.fileName,
           fromFs.mimeType,
         )
-        continue
+        return
       }
     } catch {
       /* probar Storage */
     }
 
-    // 2) Storage si está disponible
-    if (!storage) continue
+    if (!storage || !tx.invoiceFileName) return
     try {
       const path = invoicePath(tx.id, tx.invoiceFileName)
       const blob = await withTimeout(
         getBlob(ref(storage, path)),
-        15_000,
+        20_000,
         `factura ${tx.invoiceFileName}`,
       )
       await saveInvoiceFile(
@@ -226,6 +229,11 @@ export async function pullMissingInvoices(
     } catch {
       /* archivo ausente o lento */
     }
+  }
+
+  for (let i = 0; i < missing.length; i += CONCURRENCY) {
+    const slice = missing.slice(i, i + CONCURRENCY)
+    await Promise.all(slice.map((tx) => pullOne(tx)))
   }
 }
 

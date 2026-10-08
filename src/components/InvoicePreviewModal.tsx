@@ -1,9 +1,9 @@
 import { Download, X } from 'lucide-react'
 import { useEffect, useId, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { ensureInvoiceLocal } from '../lib/invoiceCloud'
 import {
   downloadBlob,
-  getInvoiceFile,
   isImageMime,
   isPdfMime,
 } from '../lib/invoiceStore'
@@ -84,11 +84,11 @@ export function InvoicePreviewModal({
           fileName || (file instanceof File ? file.name : 'Factura')
         nextMime = mimeType || file.type || ''
       } else if (transactionId) {
-        const stored = await getInvoiceFile(transactionId)
+        const stored = await ensureInvoiceLocal(transactionId)
         if (genRef.current !== gen) return
         if (!stored) {
           setError(
-            'No hay archivo guardado para esta factura. Vuelve a adjuntarla al editar el movimiento.',
+            'No hay archivo en este dispositivo ni en la nube. Vuelve a adjuntarla al editar el movimiento.',
           )
           return
         }
@@ -181,7 +181,8 @@ export function InvoicePreviewModal({
             </p>
             <h3
               id={titleId}
-              className="truncate font-display text-xl font-medium text-ink sm:text-2xl"
+              className="break-all text-base font-medium leading-snug text-ink sm:text-lg"
+              title={name || fileName || 'Factura'}
             >
               {name || fileName || 'Factura'}
             </h3>

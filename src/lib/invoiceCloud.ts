@@ -9,7 +9,11 @@ import {
 import { getDb } from './firebase'
 import { withTimeout } from './cloudTimeout'
 import { ensureCloudSession } from './auth'
-import type { StoredInvoice } from './invoiceStore'
+import {
+  getInvoiceFile,
+  saveInvoiceFile,
+  type StoredInvoice,
+} from './invoiceStore'
 
 const ROOT = 'invoice_files'
 /** Margen bajo el límite ~1 MiB de Firestore. */
@@ -128,10 +132,48 @@ export async function pullInvoiceFromFirestore(
 
   const mimeType =
     (meta.mimeType as string) || 'application/octet-stream'
+  // Safari necesita un ArrayBuffer “propio”, no un view suelto.
+  const buffer = merged.buffer.slice(
+    merged.byteOffset,
+    merged.byteOffset + merged.byteLength,
+  )
   return {
     transactionId,
     fileName: String(meta.fileName),
     mimeType,
-    blob: new Blob([merged], { type: mimeType }),
+    blob: new Blob([buffer], { type: mimeType }),
+  }
+}
+
+/**
+ * Local primero; si falta (típico en móvil nuevo), baja de Firestore y cachea.
+ */
+export async function ensureInvoiceLocal(
+  transactionId: string,
+): Promise<StoredInvoice | null> {
+  try {
+    const local = await getInvoiceFile(transactionId)
+    if (local?.blob && local.blob.size > 0) return local
+  } catch (err) {
+    console.warn('[invoice] IndexedDB read failed', err)
+  }
+
+  try {
+    const fromFs = await pullInvoiceFromFirestore(transactionId)
+    if (!fromFs) return null
+    try {
+      await saveInvoiceFile(
+        fromFs.transactionId,
+        fromFs.blob,
+        fromFs.fileName,
+        fromFs.mimeType,
+      )
+    } catch (err) {
+      console.warn('[invoice] IndexedDB save failed', err)
+    }
+    return fromFs
+  } catch (err) {
+    console.warn('[invoice] cloud pull failed', err)
+    return null
   }
 }
