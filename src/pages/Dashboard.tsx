@@ -5,6 +5,7 @@ import { FinanceChart } from '../components/FinanceChart'
 import { SignedAmount } from '../components/SignedAmount'
 import { TransactionFormModal } from '../components/TransactionFormModal'
 import { TransactionTable } from '../components/TransactionTable'
+import { VatPositionNote } from '../components/VatPositionNote'
 import { Button, Card, Dialog } from '../components/ui'
 import { useFinance } from '../context/FinanceContext'
 import { usePeriodFilter } from '../context/PeriodFilterContext'
@@ -12,6 +13,7 @@ import { getArea } from '../data/areas'
 import { areaBreakdown, recentTransactions } from '../lib/analytics'
 import { formatCurrencyPrecise, formatDate } from '../lib/format'
 import {
+  describeVatPosition,
   estimateIrpfWithheld,
   estimateVatPosition,
   type TaxBreakdownLine,
@@ -102,7 +104,13 @@ export function Dashboard() {
   const groupStats = useMemo(() => areaBreakdown(filtered), [filtered])
   const recent = useMemo(() => recentTransactions(filtered, 8), [filtered])
   const vat = useMemo(() => estimateVatPosition(filtered), [filtered])
+  const clinicaVat = useMemo(
+    () =>
+      estimateVatPosition(filtered.filter((t) => t.areaId === 'clinica')),
+    [filtered],
+  )
   const irpf = useMemo(() => estimateIrpfWithheld(filtered), [filtered])
+  const vatPos = describeVatPosition(vat.resultado)
 
   const areaCards = DASHBOARD_AREAS.map((areaId) => {
     const area = getArea(areaId)!
@@ -119,17 +127,14 @@ export function Dashboard() {
       secondaryKind: 'expense' as const,
       href: `/rama/${areaId}` as string | undefined,
       resultKind: 'result' as const,
+      showVat: areaId === 'clinica',
+      vatResultado: areaId === 'clinica' ? clinicaVat.resultado : 0,
     }
   })
 
-  const vatPayable = vat.resultado >= 0
-  const vatAmountLabel = formatCurrencyPrecise(Math.abs(vat.resultado))
-  const vatCaption = vatPayable
-    ? 'a pagar a Hacienda'
-    : 'de saldo a tu favor'
   const irpfAmountLabel = formatCurrencyPrecise(irpf.retenido)
   const irpfCaption = 'ya retenidos'
-  const vatSummary = `${vatAmountLabel} ${vatCaption}`
+  const vatSummary = `${formatCurrencyPrecise(vatPos.absolute)} ${vatPos.caption}`
   const irpfSummary = `${irpfAmountLabel} ${irpfCaption}`
 
   return (
@@ -160,28 +165,33 @@ export function Dashboard() {
                   size="md"
                 />
 
-                <dl className="mt-auto space-y-0.5 pt-3 text-xs">
-                  <div className="flex items-baseline justify-between gap-3">
-                    <dt className="text-ink-muted">{item.primaryLabel}</dt>
-                    <dd>
-                      <SignedAmount
-                        value={item.primaryValue}
-                        kind={item.primaryKind}
-                        forceSign="+"
-                      />
-                    </dd>
-                  </div>
-                  <div className="flex items-baseline justify-between gap-3">
-                    <dt className="text-ink-muted">{item.secondaryLabel}</dt>
-                    <dd>
-                      <SignedAmount
-                        value={item.secondaryValue}
-                        kind={item.secondaryKind}
-                        forceSign="−"
-                      />
-                    </dd>
-                  </div>
-                </dl>
+                <div className="mt-auto space-y-2 pt-3">
+                  <dl className="space-y-0.5 text-xs">
+                    <div className="flex items-baseline justify-between gap-3">
+                      <dt className="text-ink-muted">{item.primaryLabel}</dt>
+                      <dd>
+                        <SignedAmount
+                          value={item.primaryValue}
+                          kind={item.primaryKind}
+                          forceSign="+"
+                        />
+                      </dd>
+                    </div>
+                    <div className="flex items-baseline justify-between gap-3">
+                      <dt className="text-ink-muted">{item.secondaryLabel}</dt>
+                      <dd>
+                        <SignedAmount
+                          value={item.secondaryValue}
+                          kind={item.secondaryKind}
+                          forceSign="−"
+                        />
+                      </dd>
+                    </div>
+                  </dl>
+                  {item.showVat && (
+                    <VatPositionNote resultado={item.vatResultado} />
+                  )}
+                </div>
               </div>
             </Card>
           )
@@ -218,16 +228,11 @@ export function Dashboard() {
                   <p className="text-[10px] font-medium uppercase tracking-[0.14em] text-ink-muted">
                     IVA estimado
                   </p>
-                  <p
-                    className={`mt-1 font-display text-[1.15rem] font-medium leading-none tracking-tight sm:text-xl md:text-2xl ${
-                      vatPayable ? 'text-rose' : 'text-olive'
-                    }`}
-                  >
-                    {vatAmountLabel}
-                  </p>
-                  <p className="mt-1 text-[10px] leading-snug text-ink-muted sm:text-[11px]">
-                    {vatCaption}
-                  </p>
+                  <VatPositionNote
+                    resultado={vat.resultado}
+                    variant="stack"
+                    className="mt-1"
+                  />
                 </div>
                 <div className="min-w-0">
                   <p className="text-[10px] font-medium uppercase tracking-[0.14em] text-ink-muted">
@@ -254,9 +259,11 @@ export function Dashboard() {
         size="xl"
       >
         <p className="mb-5 max-w-2xl text-[12px] leading-relaxed text-ink-muted">
-          El IVA y el IRPF se calculan por separado. El IVA usa la cuota real y
-          la deducibilidad de cada factura; el IRPF suma las retenciones de las
-          facturas al hospital. Filtrado por el periodo seleccionado.
+          El IVA se calcula aparte del resultado (repercutido − deducible). Si
+          sale positivo, hay cuota a pagar a Hacienda; si es negativo, hay saldo
+          a tu favor; si es cero, no hay nada que pagar. Oftalmología y hospital
+          van exentos; estética suele llevar IVA. El IRPF son retenciones del
+          hospital. Filtrado por el periodo seleccionado.
         </p>
 
         <div className="space-y-6">
@@ -267,9 +274,7 @@ export function Dashboard() {
                   Desglose del IVA
                 </p>
                 <p
-                  className={`mt-1 font-display text-lg font-medium tracking-tight ${
-                    vatPayable ? 'text-rose' : 'text-olive'
-                  }`}
+                  className={`mt-1 font-display text-lg font-medium tracking-tight ${vatPos.colorClass}`}
                 >
                   {vatSummary}
                 </p>

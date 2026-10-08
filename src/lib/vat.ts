@@ -359,6 +359,45 @@ export function sumAmountBreakdown(
   }
 }
 
+/** Cómo comunicar la posición IVA frente a Hacienda. */
+export type VatPositionKind = 'pay' | 'credit' | 'none'
+
+export function describeVatPosition(resultado: number): {
+  kind: VatPositionKind
+  absolute: number
+  /** Frase bajo el importe (card Impuestos). */
+  caption: string
+  /** Frase corta junto al importe (bajo Resultado). */
+  shortCaption: string
+  colorClass: 'text-rose' | 'text-olive' | 'text-ink'
+} {
+  if (Math.abs(resultado) < 0.005) {
+    return {
+      kind: 'none',
+      absolute: 0,
+      caption: 'sin cuota a pagar a Hacienda',
+      shortCaption: 'nada a pagar al Estado',
+      colorClass: 'text-ink',
+    }
+  }
+  if (resultado > 0) {
+    return {
+      kind: 'pay',
+      absolute: Math.abs(resultado),
+      caption: 'a pagar a Hacienda',
+      shortCaption: 'a pagar a Hacienda',
+      colorClass: 'text-rose',
+    }
+  }
+  return {
+    kind: 'credit',
+    absolute: Math.abs(resultado),
+    caption: 'de saldo a tu favor',
+    shortCaption: 'saldo a tu favor',
+    colorClass: 'text-olive',
+  }
+}
+
 /**
  * Posición IVA estimada (repercutido − soportado deducible).
  * Usa el IVA real de cada factura; no mezcla retenciones IRPF.

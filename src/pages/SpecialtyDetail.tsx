@@ -7,6 +7,7 @@ import { MoneyBreakdown } from '../components/MoneyBreakdown'
 import { SignedAmount } from '../components/SignedAmount'
 import { TransactionFormModal } from '../components/TransactionFormModal'
 import { TransactionTable } from '../components/TransactionTable'
+import { VatPositionNote } from '../components/VatPositionNote'
 import { Button, Card, Dialog } from '../components/ui'
 import { useFinance } from '../context/FinanceContext'
 import { usePeriodFilter } from '../context/PeriodFilterContext'
@@ -161,12 +162,9 @@ export function SpecialtyDetail() {
         <StatCardShell
           label="Resultado"
           amount={
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-3">
               <SignedAmount value={resultado} size="lg" />
-              <div className="flex flex-wrap items-baseline gap-x-1.5 text-xs">
-                <span className="text-ink-muted">IVA</span>
-                <SignedAmount value={specialtyVat.resultado} kind="result" />
-              </div>
+              <VatPositionNote resultado={specialtyVat.resultado} />
             </div>
           }
         />
