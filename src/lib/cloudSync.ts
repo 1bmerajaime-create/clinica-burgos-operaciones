@@ -105,13 +105,21 @@ async function fetchTxSnapshot(db: Firestore) {
       PULL_TIMEOUT_MS,
       'descargar movimientos',
     )
-  } catch {
-    // En móvil/offline, caer a caché local de Firestore.
-    return await withTimeout(
-      getDocs(collection(db, TX_COLLECTION)),
-      PULL_TIMEOUT_MS,
-      'descargar movimientos',
-    )
+  } catch (serverErr) {
+    // Caché solo si ya hay datos; vacía no cuenta como «nube vacía».
+    try {
+      const cached = await withTimeout(
+        getDocs(collection(db, TX_COLLECTION)),
+        PULL_TIMEOUT_MS,
+        'descargar movimientos',
+      )
+      if (!cached.empty) return cached
+    } catch {
+      /* ignore */
+    }
+    throw serverErr instanceof Error
+      ? serverErr
+      : new Error('No se pudo descargar movimientos de la nube')
   }
 }
 
