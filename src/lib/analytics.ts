@@ -57,7 +57,7 @@ function monthKeysBetween(startKey: string, endKey: string): string[] {
   return keys
 }
 
-function monthRangeForPeriod(
+export function monthRangeForPeriod(
   period: ChartGranularity,
   semester: 1 | 2,
   quarter: 1 | 2 | 3 | 4,
@@ -73,6 +73,46 @@ function monthRangeForPeriod(
   }
   // year → full year
   return { startMonth: 1, endMonth: 12 }
+}
+
+export interface PeriodFilterOptions {
+  year: number
+  period: ChartGranularity
+  month?: number
+  semester?: 1 | 2
+  quarter?: 1 | 2 | 3 | 4
+}
+
+/** Filtra movimientos al año / semestre / trimestre / mes elegido. */
+export function filterTransactionsByPeriod(
+  transactions: Transaction[],
+  options: PeriodFilterOptions,
+): Transaction[] {
+  const {
+    year,
+    period,
+    month = 1,
+    semester = 1,
+    quarter = 1,
+  } = options
+
+  if (period === 'month') {
+    const prefix = `${year}-${String(month).padStart(2, '0')}`
+    return transactions.filter((t) => t.date.startsWith(prefix))
+  }
+
+  const { startMonth, endMonth } = monthRangeForPeriod(
+    period,
+    semester,
+    quarter,
+  )
+  const startKey = `${year}-${String(startMonth).padStart(2, '0')}`
+  const endKey = `${year}-${String(endMonth).padStart(2, '0')}`
+  const lastDay = daysInMonth(year, endMonth)
+  const start = `${startKey}-01`
+  const end = `${endKey}-${String(lastDay).padStart(2, '0')}`
+
+  return transactions.filter((t) => t.date >= start && t.date <= end)
 }
 
 /** Años presentes en los movimientos (desc). */

@@ -1,12 +1,14 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { ArrowUpRight } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { FinanceChart } from '../components/FinanceChart'
+import { PeriodFilterBar } from '../components/PeriodFilterBar'
 import { SignedAmount } from '../components/SignedAmount'
 import { TransactionTable } from '../components/TransactionTable'
 import { Card, Dialog } from '../components/ui'
 import { useFinance } from '../context/FinanceContext'
 import { getArea } from '../data/areas'
+import { usePeriodFilters } from '../hooks/usePeriodFilters'
 import { areaBreakdown, recentTransactions } from '../lib/analytics'
 import { formatCurrencyPrecise } from '../lib/format'
 import { estimateVatPosition } from '../lib/vat'
@@ -18,13 +20,24 @@ export function Dashboard() {
   const { transactions } = useFinance()
   const [vatOpen, setVatOpen] = useState(false)
 
-  const groupStats = areaBreakdown(transactions)
-  const recent = recentTransactions(transactions, 8)
-  const vat = estimateVatPosition(transactions)
+  const filters = usePeriodFilters(transactions, { withArea: true })
+  const { periodFiltered, filtered, state } = filters
+
+  const groupStats = useMemo(
+    () => areaBreakdown(periodFiltered),
+    [periodFiltered],
+  )
+  const recent = useMemo(
+    () => recentTransactions(filtered, 8),
+    [filtered],
+  )
+  const vat = useMemo(() => estimateVatPosition(filtered), [filtered])
 
   const areaCards = DASHBOARD_AREAS.map((areaId) => {
     const area = getArea(areaId)!
     const stats = groupStats.find((g) => g.areaId === areaId)!
+    const dimmed =
+      state.areaFilter !== 'total' && state.areaFilter !== areaId
     return {
       id: areaId,
       label: area.name,
@@ -38,6 +51,7 @@ export function Dashboard() {
       href: `/rama/${areaId}` as string | undefined,
       onOpen: undefined as (() => void) | undefined,
       resultKind: 'result' as const,
+      dimmed,
     }
   })
 
@@ -54,6 +68,7 @@ export function Dashboard() {
     href: undefined as string | undefined,
     onOpen: () => setVatOpen(true),
     resultKind: 'result' as const,
+    dimmed: false,
   }
 
   const cards = [...areaCards, vatCard]
@@ -88,18 +103,33 @@ export function Dashboard() {
 
   return (
     <div className="space-y-6 sm:space-y-8">
+      <PeriodFilterBar
+        state={filters.state}
+        years={filters.years}
+        defaultYear={filters.defaultYear}
+        showArea
+        setYear={filters.setYear}
+        setPeriod={filters.setPeriod}
+        setSemester={filters.setSemester}
+        setQuarter={filters.setQuarter}
+        setMonth={filters.setMonth}
+        setAreaFilter={filters.setAreaFilter}
+        resultCount={filtered.length}
+      />
+
       <section className="grid grid-cols-1 gap-3 md:grid-cols-3 md:gap-4">
         {cards.map((item, i) => {
           const interactive = Boolean(item.href || item.onOpen)
           const content = (
             <Card
               className={`h-full min-w-0 !p-4 md:!p-6 ${
+                item.dimmed ? 'opacity-45' : ''
+              } ${
                 interactive
                   ? 'transition duration-300 group-hover:-translate-y-1 group-hover:shadow-[0_16px_40px_rgba(45,41,38,0.08)]'
                   : ''
               }`}
             >
-              {/* Móvil: fila horizontal; tablet+: columna como antes */}
               <div className="flex items-center gap-3 text-left md:h-full md:flex-col md:items-stretch md:gap-0">
                 <div className="min-w-0 flex-1 md:flex md:h-full md:flex-col">
                   <div className="mb-0 flex items-start justify-between gap-2 md:mb-4 md:min-h-8">
@@ -111,7 +141,10 @@ export function Dashboard() {
                         <ArrowUpRight size={14} />
                       </span>
                     ) : (
-                      <span className="hidden h-8 w-8 shrink-0 md:block" aria-hidden />
+                      <span
+                        className="hidden h-8 w-8 shrink-0 md:block"
+                        aria-hidden
+                      />
                     )}
                   </div>
 
@@ -123,7 +156,9 @@ export function Dashboard() {
                     />
                     <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1 text-xs">
                       <span className="inline-flex items-baseline gap-1.5">
-                        <span className="text-ink-muted">{item.primaryLabel}</span>
+                        <span className="text-ink-muted">
+                          {item.primaryLabel}
+                        </span>
                         <SignedAmount
                           value={item.primaryValue}
                           kind={item.primaryKind}
@@ -153,7 +188,9 @@ export function Dashboard() {
                       />
                     </span>
                     <span className="inline-flex items-baseline gap-1">
-                      <span className="text-ink-muted">{item.secondaryLabel}</span>
+                      <span className="text-ink-muted">
+                        {item.secondaryLabel}
+                      </span>
                       <SignedAmount
                         value={item.secondaryValue}
                         kind={item.secondaryKind}
@@ -223,7 +260,8 @@ export function Dashboard() {
       >
         <p className="mb-5 max-w-2xl text-[12px] leading-relaxed text-ink-muted">
           Los balances de clínica usan bases sin IVA. El resultado estimado es
-          repercutido menos soportado deducible (tipos provisionales).
+          repercutido menos soportado deducible (tipos provisionales). Filtrado
+          por el periodo seleccionado.
         </p>
 
         <div className="mb-5 rounded-2xl border border-sand/70 bg-cream-dark/40 px-4 py-3">
@@ -254,7 +292,7 @@ export function Dashboard() {
         </dl>
       </Dialog>
 
-      <FinanceChart transactions={transactions} />
+      <FinanceChart transactions={transactions} period={state} />
 
       <TransactionTable
         transactions={recent}
