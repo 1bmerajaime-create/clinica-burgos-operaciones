@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { Download, Eye } from 'lucide-react'
-import { AREAS, SPECIALTIES, areaNeedsSpecialty } from '../data/areas'
+import { AREAS, MOVEMENT_AREAS, SPECIALTIES } from '../data/areas'
 import { useFinance } from '../context/FinanceContext'
 import { extractInvoiceFields } from '../lib/invoiceOcr'
 import { formatCurrencyPrecise } from '../lib/format'
@@ -10,6 +10,7 @@ import {
 } from '../lib/invoiceStore'
 import {
   defaultVatRateFor,
+  defaultVatSettings,
   formatVatPercent,
   resolveVatAmounts,
 } from '../lib/vat'
@@ -19,6 +20,7 @@ import type {
   Transaction,
   TransactionType,
 } from '../types'
+import { isRevenueSide } from '../types'
 import { InvoicePreviewModal } from './InvoicePreviewModal'
 import { Button, Dialog, Input, Label, Select } from './ui'
 
@@ -71,7 +73,19 @@ export function TransactionFormModal({
   const [scanProgress, setScanProgress] = useState(0)
   const [scanNote, setScanNote] = useState('')
 
-  const needsSpecialty = areaNeedsSpecialty(areaId)
+  const areaChoices = useMemo(() => {
+    const base = [...MOVEMENT_AREAS]
+    // Conservar categoría legado al editar (p.ej. Cataratas).
+    if (
+      transaction &&
+      (transaction.areaId === 'cataratas' || transaction.areaId === 'otros')
+    ) {
+      const legacy = AREAS.find((a) => a.id === transaction.areaId)
+      if (legacy && !base.some((a) => a.id === legacy.id)) base.push(legacy)
+    }
+    return base
+  }, [transaction])
+  const revenueSide = isRevenueSide(type)
 
   const parsedRate = useMemo(() => {
     if (vatExempt) return 0
@@ -90,13 +104,36 @@ export function TransactionFormModal({
     })
   }, [amount, parsedRate, amountIncludesVat])
 
+  function applyVatDefaults(
+    nextType: TransactionType,
+    nextArea: AreaId,
+    nextSpecialty: SpecialtyId | '',
+  ) {
+    const defaults = defaultVatSettings({
+      type: nextType,
+      areaId: nextArea,
+      specialtyId: nextSpecialty,
+    })
+    setVatExempt(defaults.vatExempt)
+    setVatRateInput(rateToInput(defaults.vatRate))
+  }
+
   useEffect(() => {
     if (!open) return
 
     if (transaction) {
       setType(transaction.type)
-      setAreaId(transaction.areaId)
-      setSpecialtyId(transaction.specialtyId ?? '')
+      // Área "otros" antigua → Clínica + especialidad Otros
+      if (transaction.areaId === 'otros') {
+        setAreaId('clinica')
+        setSpecialtyId('otros')
+      } else {
+        setAreaId(transaction.areaId)
+        setSpecialtyId(
+          transaction.specialtyId ??
+            (transaction.areaId === 'cataratas' ? '' : 'oftalmologia'),
+        )
+      }
       // Edición sobre el total con IVA incluido
       setAmountIncludesVat(true)
       setAmount(
@@ -130,15 +167,23 @@ export function TransactionFormModal({
       return
     }
 
+    const initialArea =
+      defaultAreaId === 'clinica' || defaultAreaId === 'quiron'
+        ? defaultAreaId
+        : 'clinica'
+    const initialSpecialty =
+      defaultSpecialtyId === 'oftalmologia' ||
+      defaultSpecialtyId === 'estetica' ||
+      defaultSpecialtyId === 'otros'
+        ? defaultSpecialtyId
+        : 'oftalmologia'
+
     setType(typeProp)
-    setAreaId(defaultAreaId)
-    setSpecialtyId(
-      areaNeedsSpecialty(defaultAreaId) ? defaultSpecialtyId : '',
-    )
+    setAreaId(initialArea)
+    setSpecialtyId(initialSpecialty)
     setAmount('')
     setAmountIncludesVat(true)
-    setVatExempt(false)
-    setVatRateInput(rateToInput(defaultVatRateFor(typeProp)))
+    applyVatDefaults(typeProp, initialArea, initialSpecialty)
     setVatDeductible(true)
     setDate(new Date().toISOString().slice(0, 10))
     setDescription('')
@@ -162,17 +207,20 @@ export function TransactionFormModal({
 
   function handleAreaChange(next: AreaId) {
     setAreaId(next)
-    if (areaNeedsSpecialty(next)) {
-      setSpecialtyId((prev) => prev || 'oftalmologia')
-    } else {
-      setSpecialtyId('')
-    }
+    const nextSpecialty = (specialtyId || 'oftalmologia') as SpecialtyId
+    if (!specialtyId) setSpecialtyId('oftalmologia')
+    if (!isEditing) applyVatDefaults(type, next, nextSpecialty)
+  }
+
+  function handleSpecialtyChange(next: SpecialtyId | '') {
+    setSpecialtyId(next)
+    if (!isEditing) applyVatDefaults(type, areaId, next)
   }
 
   function handleTypeChange(next: TransactionType) {
     setType(next)
-    if (!vatExempt) {
-      setVatRateInput(rateToInput(defaultVatRateFor(next)))
+    if (!isEditing) {
+      applyVatDefaults(next, areaId, specialtyId || 'oftalmologia')
     }
   }
 
@@ -258,11 +306,13 @@ export function TransactionFormModal({
     downloadBlob(stored.blob, stored.fileName)
   }
 
+  const requiresSpecialty = areaId === 'clinica' || areaId === 'quiron'
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
     const value = Number(amount.replace(',', '.'))
     if (!value || value <= 0 || !description.trim()) return
-    if (needsSpecialty && !specialtyId) return
+    if (requiresSpecialty && !specialtyId) return
 
     const vat = resolveVatAmounts({
       amount: value,
@@ -273,7 +323,9 @@ export function TransactionFormModal({
     const payload = {
       type,
       areaId,
-      specialtyId: needsSpecialty ? (specialtyId as SpecialtyId) : undefined,
+      specialtyId: requiresSpecialty
+        ? (specialtyId as SpecialtyId)
+        : specialtyId || undefined,
       amount: value,
       netAmount: vat.netAmount,
       vatAmount: vat.vatAmount,
@@ -335,6 +387,7 @@ export function TransactionFormModal({
             >
               <option value="ingreso">Ingreso</option>
               <option value="gasto">Gasto</option>
+              <option value="devolucion">Devolución</option>
             </Select>
           </div>
 
@@ -434,7 +487,7 @@ export function TransactionFormModal({
             />
           </div>
 
-          <div className={needsSpecialty ? 'grid gap-4 sm:grid-cols-2' : ''}>
+          <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <Label htmlFor="area">Categoría</Label>
               <Select
@@ -442,7 +495,7 @@ export function TransactionFormModal({
                 value={areaId}
                 onChange={(e) => handleAreaChange(e.target.value as AreaId)}
               >
-                {AREAS.map((a) => (
+                {areaChoices.map((a) => (
                   <option key={a.id} value={a.id}>
                     {a.name}
                   </option>
@@ -450,26 +503,25 @@ export function TransactionFormModal({
               </Select>
             </div>
 
-            {needsSpecialty && (
-              <div className="animate-fade-up">
-                <Label htmlFor="specialty">Especialidad</Label>
-                <Select
-                  id="specialty"
-                  value={specialtyId}
-                  onChange={(e) =>
-                    setSpecialtyId(e.target.value as SpecialtyId)
-                  }
-                  required
-                >
-                  <option value="">Seleccionar…</option>
-                  {SPECIALTIES.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-            )}
+            <div>
+              <Label htmlFor="specialty">Especialidad</Label>
+              <Select
+                id="specialty"
+                value={specialtyId}
+                onChange={(e) =>
+                  handleSpecialtyChange(e.target.value as SpecialtyId | '')
+                }
+                required={requiresSpecialty}
+                disabled={!requiresSpecialty}
+              >
+                {!requiresSpecialty && <option value="">—</option>}
+                {SPECIALTIES.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </Select>
+            </div>
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
@@ -486,9 +538,9 @@ export function TransactionFormModal({
                 required
               />
               <p className="mt-1.5 text-[11px] text-ink-muted">
-                {type === 'ingreso'
-                  ? 'Total con IVA · Base = total ÷ 1,15 · IVA = total − base.'
-                  : 'Total con IVA · Base = total ÷ 1,21 · IVA = total − base.'}
+                {vatExempt
+                  ? 'Operación exenta: el importe se registra sin IVA.'
+                  : `Total con IVA · Base = total ÷ ${(1 + parsedRate).toFixed(2).replace('.', ',')} · IVA = total − base.`}
               </p>
             </div>
             <div>
@@ -508,8 +560,9 @@ export function TransactionFormModal({
               Desglose IVA
             </p>
             <p className="text-[11px] leading-relaxed text-ink-muted">
-              El importe es el total con IVA. Se desglosa la base y el IVA al
-              tipo indicado (15 % ingresos / 21 % gastos, modificables).
+              El importe es el total con IVA (salvo exentas). Oftalmología en
+              Clínica va exenta; estética, al 21 %. El resto mantiene 15 % /
+              21 %.
             </p>
 
             <label className="flex cursor-pointer items-start gap-2.5 text-sm text-ink">
@@ -560,7 +613,8 @@ export function TransactionFormModal({
               </div>
               <div className="flex items-center justify-between gap-4">
                 <dt className="text-ink-soft">
-                  {type === 'ingreso' ? 'IVA repercutido' : 'IVA soportado'}
+                  {revenueSide ? 'IVA repercutido' : 'IVA soportado'}
+                  {type === 'devolucion' ? ' (devolución)' : ''}
                   {!vatExempt && ` (${formatVatPercent(parsedRate)} %)`}
                 </dt>
                 <dd className="tabular-nums text-ink">

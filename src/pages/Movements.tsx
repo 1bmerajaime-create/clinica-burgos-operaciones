@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { SlidersHorizontal } from 'lucide-react'
+import { useSearchParams } from 'react-router-dom'
 import { TransactionTable } from '../components/TransactionTable'
 import { Button, Dialog, Select } from '../components/ui'
 import { useFinance } from '../context/FinanceContext'
@@ -7,15 +8,59 @@ import { usePeriodFilter } from '../context/PeriodFilterContext'
 import { AREAS, SPECIALTIES } from '../data/areas'
 import type { AreaId, SpecialtyId, TransactionType } from '../types'
 
+function parseArea(value: string | null): 'all' | AreaId {
+  if (
+    value === 'clinica' ||
+    value === 'quiron' ||
+    value === 'cataratas' ||
+    value === 'otros'
+  ) {
+    return value
+  }
+  return 'all'
+}
+
+function parseSpecialty(value: string | null): 'all' | SpecialtyId {
+  if (
+    value === 'oftalmologia' ||
+    value === 'estetica' ||
+    value === 'otros'
+  ) {
+    return value
+  }
+  return 'all'
+}
+
+function parseType(value: string | null): 'all' | TransactionType {
+  if (value === 'ingreso' || value === 'gasto' || value === 'devolucion') {
+    return value
+  }
+  return 'all'
+}
+
 export function Movements() {
   const { transactions } = useFinance()
   const { filterPeriod, summary: periodSummary } = usePeriodFilter()
+  const [searchParams] = useSearchParams()
   const [filtersOpen, setFiltersOpen] = useState(false)
-  const [area, setArea] = useState<'all' | AreaId>('all')
-  const [specialty, setSpecialty] = useState<'all' | SpecialtyId>('all')
-  const [type, setType] = useState<'all' | TransactionType>('all')
+  const [area, setArea] = useState<'all' | AreaId>(() =>
+    parseArea(searchParams.get('area')),
+  )
+  const [specialty, setSpecialty] = useState<'all' | SpecialtyId>(() =>
+    parseSpecialty(searchParams.get('specialty')),
+  )
+  const [type, setType] = useState<'all' | TransactionType>(() =>
+    parseType(searchParams.get('type')),
+  )
 
-  const showSpecialtyFilter = area === 'clinica' || area === 'quiron'
+  useEffect(() => {
+    setArea(parseArea(searchParams.get('area')))
+    setSpecialty(parseSpecialty(searchParams.get('specialty')))
+    setType(parseType(searchParams.get('type')))
+  }, [searchParams])
+
+  const showSpecialtyFilter =
+    area === 'all' || area === 'clinica' || area === 'quiron'
 
   const filtered = useMemo(() => {
     return filterPeriod(transactions)
@@ -50,10 +95,12 @@ export function Movements() {
         ? SPECIALTIES.find((s) => s.id === specialty)?.name
         : null,
       type === 'all'
-        ? 'Ingresos y gastos'
+        ? 'Todos los tipos'
         : type === 'ingreso'
           ? 'Ingresos'
-          : 'Gastos',
+          : type === 'gasto'
+            ? 'Gastos'
+            : 'Devoluciones',
     ].filter(Boolean)
     return parts.join(' · ')
   }, [periodSummary, area, specialty, type, showSpecialtyFilter])
@@ -102,9 +149,10 @@ export function Movements() {
           onChange={(e) => setType(e.target.value as 'all' | TransactionType)}
           aria-label="Filtrar por tipo"
         >
-          <option value="all">Ingresos y gastos</option>
+          <option value="all">Todos los tipos</option>
           <option value="ingreso">Solo ingresos</option>
           <option value="gasto">Solo gastos</option>
+          <option value="devolucion">Solo devoluciones</option>
         </Select>
       </div>
     </>

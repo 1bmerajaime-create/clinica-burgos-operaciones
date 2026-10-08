@@ -14,6 +14,7 @@ import {
   filterByArea,
   specialtyBreakdown,
   sumByType,
+  sumNetIngresos,
 } from '../lib/analytics'
 import { formatCurrency, formatSignedCurrency, sentimentClass } from '../lib/format'
 import { sumAmountBreakdown } from '../lib/vat'
@@ -98,7 +99,7 @@ export function BranchDetail() {
     [filterPeriod, scopedAll],
   )
 
-  const ingresos = sumByType(areaTransactions, 'ingreso', id)
+  const ingresos = sumNetIngresos(areaTransactions, id)
   const gastos = sumByType(areaTransactions, 'gasto', id)
   const resultado = ingresos - gastos
   const bySpecialty = specialtyBreakdown(areaTransactions, id)
@@ -114,7 +115,11 @@ export function BranchDetail() {
 
   const listTransactions = useMemo(() => {
     if (!listType) return []
-    return areaTransactions.filter((t) => t.type === listType)
+    return areaTransactions.filter((t) =>
+      listType === 'ingreso'
+        ? t.type === 'ingreso' || t.type === 'devolucion'
+        : t.type === listType,
+    )
   }, [areaTransactions, listType])
 
   if (!area) return <Navigate to="/" replace />
@@ -224,14 +229,22 @@ export function BranchDetail() {
         title="Movimientos"
         eyebrow="Periodo seleccionado"
         action={
-          <Button
-            type="button"
-            className="!px-3.5"
-            onClick={() => openMovement('ingreso')}
-          >
-            <Plus size={14} />
-            Movimiento
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Link
+              to={`/movimientos?area=${id}`}
+              className="text-[11px] font-medium uppercase tracking-[0.14em] text-ink-soft underline-offset-4 hover:text-ink hover:underline"
+            >
+              Ver más
+            </Link>
+            <Button
+              type="button"
+              className="!px-3.5"
+              onClick={() => openMovement('ingreso')}
+            >
+              <Plus size={14} />
+              Movimiento
+            </Button>
+          </div>
         }
       />
 
@@ -239,7 +252,9 @@ export function BranchDetail() {
         open={Boolean(listType)}
         onClose={() => setListType(null)}
         title={
-          listType === 'ingreso' ? 'Listado de ingresos' : 'Listado de gastos'
+          listType === 'ingreso'
+            ? 'Ingresos y devoluciones'
+            : 'Listado de gastos'
         }
         size="lg"
       >

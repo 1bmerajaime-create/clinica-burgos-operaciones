@@ -25,11 +25,25 @@ export const AREAS: Area[] = [
     accent: '#5C6B7A',
     hasSpecialty: false,
   },
+  {
+    id: 'otros',
+    name: 'Otros (legado)',
+    shortName: 'Otros',
+    description: 'Categoría antigua; usar especialidad Otros',
+    accent: '#6B6560',
+    hasSpecialty: false,
+  },
 ]
+
+/** Categorías del formulario de movimiento. */
+export const MOVEMENT_AREAS: Area[] = AREAS.filter(
+  (a) => a.id === 'clinica' || a.id === 'quiron',
+)
 
 export const SPECIALTIES: Specialty[] = [
   { id: 'oftalmologia', name: 'Oftalmología' },
   { id: 'estetica', name: 'Medicina estética' },
+  { id: 'otros', name: 'Otros' },
 ]
 
 export function getArea(id: string): Area | undefined {

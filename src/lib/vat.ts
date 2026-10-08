@@ -1,4 +1,9 @@
-import type { Transaction, TransactionType } from '../types'
+import type {
+  AreaId,
+  SpecialtyId,
+  Transaction,
+  TransactionType,
+} from '../types'
 
 /**
  * Tipos configurables (provisionales, pendientes de validación fiscal).
@@ -24,9 +29,35 @@ export interface VatBreakdown {
 }
 
 export function defaultVatRateFor(type: TransactionType): number {
-  return type === 'ingreso'
-    ? DEFAULT_INCOME_VAT_RATE
-    : DEFAULT_EXPENSE_VAT_RATE
+  return type === 'gasto'
+    ? DEFAULT_EXPENSE_VAT_RATE
+    : DEFAULT_INCOME_VAT_RATE
+}
+
+/**
+ * Defaults de IVA al crear un movimiento.
+ * - Ingreso/devolución Clínica + Oftalmología → exento
+ * - Ingreso/devolución Clínica + Medicina estética → 21 %
+ * - Resto igual que antes (ingreso/devolución 15 %, gasto 21 %)
+ */
+export function defaultVatSettings(input: {
+  type: TransactionType
+  areaId?: AreaId
+  specialtyId?: SpecialtyId | '' | null
+}): { vatExempt: boolean; vatRate: number } {
+  if (input.type === 'gasto') {
+    return { vatExempt: false, vatRate: DEFAULT_EXPENSE_VAT_RATE }
+  }
+
+  if (input.areaId === 'clinica' && input.specialtyId === 'oftalmologia') {
+    return { vatExempt: true, vatRate: DEFAULT_INCOME_VAT_RATE }
+  }
+
+  if (input.areaId === 'clinica' && input.specialtyId === 'estetica') {
+    return { vatExempt: false, vatRate: DEFAULT_EXPENSE_VAT_RATE }
+  }
+
+  return { vatExempt: false, vatRate: DEFAULT_INCOME_VAT_RATE }
 }
 
 export function roundMoney(value: number): number {
@@ -209,11 +240,21 @@ export function sumAmountBreakdown(
   let vat = 0
   let total = 0
   for (const tx of transactions) {
-    if (tx.type !== type) continue
+    const sign =
+      type === 'ingreso'
+        ? tx.type === 'ingreso'
+          ? 1
+          : tx.type === 'devolucion'
+            ? -1
+            : 0
+        : tx.type === type
+          ? 1
+          : 0
+    if (sign === 0) continue
     const b = txBreakdown(tx)
-    base += b.netAmount
-    vat += b.vatAmount
-    total += b.grossAmount
+    base += sign * b.netAmount
+    vat += sign * b.vatAmount
+    total += sign * b.grossAmount
   }
   return {
     base: roundMoney(base),
@@ -238,6 +279,9 @@ export function estimateVatPosition(transactions: Transaction[]): VatEstimate {
     if (tx.type === 'ingreso') {
       incomeBase += b.netAmount
       repercutido += b.vatAmount
+    } else if (tx.type === 'devolucion') {
+      incomeBase -= b.netAmount
+      repercutido -= b.vatAmount
     } else {
       expenseBase += b.netAmount
       soportado += b.vatAmount

@@ -15,6 +15,7 @@ import {
   filterByArea,
   filterBySpecialty,
   sumByType,
+  sumNetIngresos,
 } from '../lib/analytics'
 import { sumAmountBreakdown } from '../lib/vat'
 import type { AreaId, SpecialtyId, TransactionType } from '../types'
@@ -101,7 +102,7 @@ export function SpecialtyDetail() {
     [filterPeriod, scopedAll],
   )
 
-  const ingresos = sumByType(specialtyTransactions, 'ingreso', id, specId)
+  const ingresos = sumNetIngresos(specialtyTransactions, id, specId)
   const gastos = sumByType(specialtyTransactions, 'gasto', id, specId)
   const resultado = ingresos - gastos
 
@@ -116,7 +117,11 @@ export function SpecialtyDetail() {
 
   const listTransactions = useMemo(() => {
     if (!listType) return []
-    return specialtyTransactions.filter((t) => t.type === listType)
+    return specialtyTransactions.filter((t) =>
+      listType === 'ingreso'
+        ? t.type === 'ingreso' || t.type === 'devolucion'
+        : t.type === listType,
+    )
   }, [specialtyTransactions, listType])
 
   if (!area || !area.hasSpecialty || !specialty) {
@@ -196,14 +201,22 @@ export function SpecialtyDetail() {
         title="Movimientos"
         eyebrow="Periodo seleccionado"
         action={
-          <Button
-            type="button"
-            className="!px-3.5"
-            onClick={() => openMovement('ingreso')}
-          >
-            <Plus size={14} />
-            Movimiento
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Link
+              to={`/movimientos?area=${id}&specialty=${specId}`}
+              className="text-[11px] font-medium uppercase tracking-[0.14em] text-ink-soft underline-offset-4 hover:text-ink hover:underline"
+            >
+              Ver más
+            </Link>
+            <Button
+              type="button"
+              className="!px-3.5"
+              onClick={() => openMovement('ingreso')}
+            >
+              <Plus size={14} />
+              Movimiento
+            </Button>
+          </div>
         }
       />
 
@@ -211,7 +224,9 @@ export function SpecialtyDetail() {
         open={Boolean(listType)}
         onClose={() => setListType(null)}
         title={
-          listType === 'ingreso' ? 'Listado de ingresos' : 'Listado de gastos'
+          listType === 'ingreso'
+            ? 'Ingresos y devoluciones'
+            : 'Listado de gastos'
         }
         size="lg"
       >

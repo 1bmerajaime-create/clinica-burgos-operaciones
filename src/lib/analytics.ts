@@ -3,7 +3,7 @@ import { formatMonthLabel } from './format'
 
 export function sumByType(
   transactions: Transaction[],
-  type: 'ingreso' | 'gasto',
+  type: 'ingreso' | 'gasto' | 'devolucion',
   areaId?: AreaId,
   specialtyId?: SpecialtyId,
 ): number {
@@ -15,6 +15,27 @@ export function sumByType(
         (!specialtyId || t.specialtyId === specialtyId),
     )
     .reduce((acc, t) => acc + t.amount, 0)
+}
+
+/** Ingresos menos devoluciones (base imponible). */
+export function sumNetIngresos(
+  transactions: Transaction[],
+  areaId?: AreaId,
+  specialtyId?: SpecialtyId,
+): number {
+  return (
+    sumByType(transactions, 'ingreso', areaId, specialtyId) -
+    sumByType(transactions, 'devolucion', areaId, specialtyId)
+  )
+}
+
+function accumulateBySide(
+  t: Transaction,
+  current: { ingresos: number; gastos: number },
+) {
+  if (t.type === 'ingreso') current.ingresos += t.amount
+  else if (t.type === 'devolucion') current.ingresos -= t.amount
+  else current.gastos += t.amount
 }
 
 export function filterByArea(
@@ -166,8 +187,7 @@ export function buildChartMonthSeries(
       if (!t.date.startsWith(prefix)) continue
       const key = t.date.slice(0, 10)
       const current = dayTotals.get(key) ?? { ingresos: 0, gastos: 0 }
-      if (t.type === 'ingreso') current.ingresos += t.amount
-      else current.gastos += t.amount
+      accumulateBySide(t, current)
       dayTotals.set(key, current)
     }
 
@@ -189,8 +209,7 @@ export function buildChartMonthSeries(
   for (const t of filtered) {
     const key = t.date.slice(0, 7)
     const current = totals.get(key) ?? { ingresos: 0, gastos: 0 }
-    if (t.type === 'ingreso') current.ingresos += t.amount
-    else current.gastos += t.amount
+    accumulateBySide(t, current)
     totals.set(key, current)
   }
 
@@ -239,8 +258,7 @@ export function buildMonthlySeries(
   for (const t of filtered) {
     const key = t.date.slice(0, 7)
     const current = totals.get(key) ?? { ingresos: 0, gastos: 0 }
-    if (t.type === 'ingreso') current.ingresos += t.amount
-    else current.gastos += t.amount
+    accumulateBySide(t, current)
     totals.set(key, current)
   }
 
@@ -267,10 +285,10 @@ export function productSaleProfit(sale: {
 }
 
 export function areaBreakdown(transactions: Transaction[]) {
-  const areas: AreaId[] = ['clinica', 'quiron', 'cataratas']
+  const areas: AreaId[] = ['clinica', 'quiron', 'cataratas', 'otros']
 
   return areas.map((id) => {
-    const ingresos = sumByType(transactions, 'ingreso', id)
+    const ingresos = sumNetIngresos(transactions, id)
     const gastos = sumByType(transactions, 'gasto', id)
     return {
       areaId: id,
@@ -296,7 +314,7 @@ export function previousMonthKey(monthKey: string): string {
 export function sumForMonth(
   transactions: Transaction[],
   monthKey: string,
-  type?: 'ingreso' | 'gasto',
+  type?: 'ingreso' | 'gasto' | 'devolucion',
   areaId?: AreaId,
 ): number {
   return transactions
@@ -314,6 +332,7 @@ function resultadoForMonth(
 ): number {
   return (
     sumForMonth(transactions, monthKey, 'ingreso', areaId) -
+    sumForMonth(transactions, monthKey, 'devolucion', areaId) -
     sumForMonth(transactions, monthKey, 'gasto', areaId)
   )
 }
@@ -338,7 +357,7 @@ export function areaPeriodComparison(
   mode: CompareMode = 'month',
   refDate: Date = new Date(),
 ) {
-  const areas: AreaId[] = ['clinica', 'quiron', 'cataratas']
+  const areas: AreaId[] = ['clinica', 'quiron', 'cataratas', 'otros']
   const currentMonth = toMonthKey(refDate)
   const year = refDate.getFullYear()
   const monthNum = refDate.getMonth() + 1
@@ -402,17 +421,13 @@ export function specialtyBreakdown(
   transactions: Transaction[],
   areaId: AreaId,
 ) {
-  const specialties: SpecialtyId[] = ['oftalmologia', 'estetica']
+  const specialties: SpecialtyId[] = ['oftalmologia', 'estetica', 'otros']
   const inArea = filterByArea(transactions, areaId)
 
   return specialties.map((id) => {
     const subset = filterBySpecialty(inArea, id)
-    const ingresos = subset
-      .filter((t) => t.type === 'ingreso')
-      .reduce((a, t) => a + t.amount, 0)
-    const gastos = subset
-      .filter((t) => t.type === 'gasto')
-      .reduce((a, t) => a + t.amount, 0)
+    const ingresos = sumNetIngresos(subset)
+    const gastos = sumByType(subset, 'gasto')
     return {
       specialtyId: id,
       ingresos,

@@ -1,8 +1,13 @@
-export type AreaId = 'clinica' | 'quiron' | 'cataratas'
+export type AreaId = 'clinica' | 'quiron' | 'cataratas' | 'otros'
 
-export type SpecialtyId = 'oftalmologia' | 'estetica'
+export type SpecialtyId = 'oftalmologia' | 'estetica' | 'otros'
 
-export type TransactionType = 'ingreso' | 'gasto'
+export type TransactionType = 'ingreso' | 'gasto' | 'devolucion'
+
+/** Ingreso o devolución (misma lógica de IVA / especialidad). */
+export function isRevenueSide(type: TransactionType): boolean {
+  return type === 'ingreso' || type === 'devolucion'
+}
 
 export interface Area {
   id: AreaId

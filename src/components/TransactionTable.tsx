@@ -22,15 +22,20 @@ function AmountBlock({ t }: { t: Transaction }) {
   const total = t.grossAmount ?? t.amount
   const base = t.netAmount ?? t.amount
   const exempt = Boolean(t.vatExempt) || t.vatRate === 0
+  const negative = t.type === 'gasto' || t.type === 'devolucion'
 
   return (
     <div
       className={`flex flex-col gap-0.5 font-medium tabular-nums ${
-        t.type === 'ingreso' ? 'text-olive' : 'text-rose'
+        t.type === 'ingreso'
+          ? 'text-olive'
+          : t.type === 'devolucion'
+            ? 'text-brass'
+            : 'text-rose'
       }`}
     >
       <span>
-        {t.type === 'gasto' ? '−' : '+'}
+        {negative ? '−' : '+'}
         {formatCurrencyPrecise(total)}
         <span className="ml-1 text-[10px] font-normal uppercase tracking-[0.08em] text-ink-muted">
           total
@@ -58,13 +63,20 @@ function AmountBlock({ t }: { t: Transaction }) {
 }
 
 function TypeBadge({ type }: { type: Transaction['type'] }) {
+  const styles =
+    type === 'ingreso'
+      ? 'bg-olive/15 text-olive'
+      : type === 'devolucion'
+        ? 'bg-brass/15 text-brass'
+        : 'bg-rose/15 text-rose'
+  const label =
+    type === 'devolucion' ? 'devolución' : type
+
   return (
     <span
-      className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.12em] ${
-        type === 'ingreso' ? 'bg-olive/15 text-olive' : 'bg-rose/15 text-rose'
-      }`}
+      className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.12em] ${styles}`}
     >
-      {type}
+      {label}
     </span>
   )
 }
