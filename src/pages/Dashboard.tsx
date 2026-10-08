@@ -103,20 +103,10 @@ export function Dashboard() {
   const recent = useMemo(() => recentTransactions(filtered, 8), [filtered])
   const vat = useMemo(() => estimateVatPosition(filtered), [filtered])
   const irpf = useMemo(() => estimateIrpfWithheld(filtered), [filtered])
-  const vatByArea = useMemo(() => {
-    const map = {} as Record<AreaId, ReturnType<typeof estimateVatPosition>>
-    for (const areaId of DASHBOARD_AREAS) {
-      map[areaId] = estimateVatPosition(
-        filtered.filter((t) => t.areaId === areaId),
-      )
-    }
-    return map
-  }, [filtered])
 
   const areaCards = DASHBOARD_AREAS.map((areaId) => {
     const area = getArea(areaId)!
     const stats = groupStats.find((g) => g.areaId === areaId)!
-    const areaVat = vatByArea[areaId]
     return {
       id: areaId,
       label: area.name,
@@ -127,9 +117,6 @@ export function Dashboard() {
       secondaryLabel: 'Gasto',
       secondaryValue: stats.gastos,
       secondaryKind: 'expense' as const,
-      tertiaryLabel: 'IVA',
-      tertiaryValue: areaVat.resultado,
-      tertiaryKind: 'neutral' as const,
       href: `/rama/${areaId}` as string | undefined,
       resultKind: 'result' as const,
     }
@@ -167,48 +154,34 @@ export function Dashboard() {
                   </span>
                 </div>
 
-                <div className="flex flex-col gap-1.5">
-                  <SignedAmount
-                    value={item.value}
-                    kind={item.resultKind}
-                    size="md"
-                  />
-                  <dl className="space-y-0.5 text-xs">
-                    <div className="flex items-baseline justify-between gap-3">
-                      <dt className="text-ink-muted">{item.primaryLabel}</dt>
-                      <dd>
-                        <SignedAmount
-                          value={item.primaryValue}
-                          kind={item.primaryKind}
-                          forceSign="+"
-                        />
-                      </dd>
-                    </div>
-                    <div className="flex items-baseline justify-between gap-3">
-                      <dt className="text-ink-muted">{item.secondaryLabel}</dt>
-                      <dd>
-                        <SignedAmount
-                          value={item.secondaryValue}
-                          kind={item.secondaryKind}
-                          forceSign="−"
-                        />
-                      </dd>
-                    </div>
-                    {item.tertiaryLabel != null &&
-                      item.tertiaryValue != null &&
-                      item.tertiaryKind != null && (
-                        <div className="flex items-baseline justify-between gap-3">
-                          <dt className="text-ink-muted">{item.tertiaryLabel}</dt>
-                          <dd>
-                            <SignedAmount
-                              value={item.tertiaryValue}
-                              kind={item.tertiaryKind}
-                            />
-                          </dd>
-                        </div>
-                      )}
-                  </dl>
-                </div>
+                <SignedAmount
+                  value={item.value}
+                  kind={item.resultKind}
+                  size="md"
+                />
+
+                <dl className="mt-auto space-y-0.5 pt-3 text-xs">
+                  <div className="flex items-baseline justify-between gap-3">
+                    <dt className="text-ink-muted">{item.primaryLabel}</dt>
+                    <dd>
+                      <SignedAmount
+                        value={item.primaryValue}
+                        kind={item.primaryKind}
+                        forceSign="+"
+                      />
+                    </dd>
+                  </div>
+                  <div className="flex items-baseline justify-between gap-3">
+                    <dt className="text-ink-muted">{item.secondaryLabel}</dt>
+                    <dd>
+                      <SignedAmount
+                        value={item.secondaryValue}
+                        kind={item.secondaryKind}
+                        forceSign="−"
+                      />
+                    </dd>
+                  </div>
+                </dl>
               </div>
             </Card>
           )
@@ -240,7 +213,7 @@ export function Dashboard() {
                 </span>
               </div>
 
-              <div className="grid grid-cols-2 gap-3 md:grid-cols-1">
+              <div className="mt-auto grid grid-cols-2 gap-3">
                 <div className="min-w-0">
                   <p className="text-[10px] font-medium uppercase tracking-[0.14em] text-ink-muted">
                     IVA estimado
