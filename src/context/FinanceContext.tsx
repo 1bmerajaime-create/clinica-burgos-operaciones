@@ -14,6 +14,7 @@ import {
 import {
   defaultVatRateFor,
   normalizeVatTransaction,
+  reinterpretAsNetBase,
   resolveVatAmounts,
 } from '../lib/vat'
 import type {
@@ -48,10 +49,12 @@ function withVatFields(input: NewTransactionInput): NewTransactionInput {
   const vatRate = exempt
     ? 0
     : (input.vatRate ?? defaultVatRateFor(input.type))
+  // Por defecto: IVA = importe × tipo (el importe es la base)
+  const amountIncludesVat = input.amountIncludesVat === true
   const breakdown = resolveVatAmounts({
     amount: input.amount,
     vatRate,
-    amountIncludesVat: Boolean(input.amountIncludesVat),
+    amountIncludesVat,
   })
   return normalizeVatTransaction({
     ...input,
@@ -59,6 +62,7 @@ function withVatFields(input: NewTransactionInput): NewTransactionInput {
     amount: breakdown.netAmount,
     vatRate,
     vatExempt: exempt,
+    amountIncludesVat,
   })
 }
 
@@ -100,8 +104,15 @@ interface FinanceContextValue {
 
 const FinanceContext = createContext<FinanceContextValue | null>(null)
 
-const TX_KEY = 'cb-operaciones-transactions-v10'
+const TX_KEY = 'cb-operaciones-transactions-v12'
+const TX_KEY_V11 = 'cb-operaciones-transactions-v11'
+const TX_KEY_V10 = 'cb-operaciones-transactions-v10'
 const INV_KEY = 'cb-operaciones-inventory-v4'
+
+function persistMigrated(txs: Transaction[]): Transaction[] {
+  localStorage.setItem(TX_KEY, JSON.stringify(txs))
+  return txs
+}
 
 function loadTransactions(): Transaction[] {
   try {
@@ -113,6 +124,34 @@ function loadTransactions(): Transaction[] {
   } catch {
     /* ignore */
   }
+
+  // v11 usaba desglose «total ÷ 1,15»; pasamos a IVA = importe × %.
+  try {
+    const v11 = localStorage.getItem(TX_KEY_V11)
+    if (v11) {
+      const parsed = JSON.parse(v11) as Transaction[]
+      if (Array.isArray(parsed)) {
+        return persistMigrated(
+          parsed.map((tx) => normalizeTransaction(reinterpretAsNetBase(tx))),
+        )
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+
+  try {
+    const v10 = localStorage.getItem(TX_KEY_V10)
+    if (v10) {
+      const parsed = JSON.parse(v10) as Transaction[]
+      if (Array.isArray(parsed)) {
+        return persistMigrated(parsed.map(normalizeTransaction))
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+
   // Solo Quirón; sin clínica ni cataratas de demo.
   return SEED_TRANSACTIONS.map(normalizeTransaction)
 }

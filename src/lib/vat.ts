@@ -34,8 +34,20 @@ export function roundMoney(value: number): number {
 }
 
 /**
+ * Normaliza el tipo a fracción (0.15). Si vino como porcentaje (15), lo convierte.
+ */
+export function normalizeVatRateFraction(rate: number): number {
+  if (!Number.isFinite(rate) || rate < 0) return 0
+  if (rate > 1) return rate / 100
+  return rate
+}
+
+/**
  * Resuelve base / IVA / bruto según si el importe introducido
  * incluye IVA o es base, y el tipo aplicado (0 = exento).
+ *
+ * Con IVA incluido (total): base = total / (1 + tipo), IVA = total − base.
+ * Sobre base: IVA = base × tipo, total = base + IVA.
  */
 export function resolveVatAmounts(input: {
   amount: number
@@ -43,7 +55,7 @@ export function resolveVatAmounts(input: {
   amountIncludesVat: boolean
 }): VatBreakdown {
   const amount = roundMoney(Math.abs(input.amount))
-  const vatRate = Math.max(0, input.vatRate)
+  const vatRate = normalizeVatRateFraction(Math.max(0, input.vatRate))
 
   if (vatRate === 0 || amount === 0) {
     return {
@@ -71,6 +83,38 @@ export function resolveVatAmounts(input: {
   return { netAmount, vatAmount, grossAmount, vatRate }
 }
 
+/**
+ * Recalcula el desglose aplicando el % sobre el importe (base):
+ * IVA = importe × tipo · Total = importe + IVA.
+ * Si venía en modo «total con IVA», toma ese total como el importe base.
+ */
+export function reinterpretAsNetBase(tx: Transaction): Transaction {
+  const exempt = Boolean(tx.vatExempt) || tx.vatRate === 0
+  const vatRate = exempt
+    ? 0
+    : normalizeVatRateFraction(tx.vatRate ?? defaultVatRateFor(tx.type))
+
+  const baseFigure =
+    tx.amountIncludesVat === true
+      ? (tx.grossAmount ?? tx.amount)
+      : (tx.netAmount ?? tx.amount)
+
+  const breakdown = resolveVatAmounts({
+    amount: baseFigure,
+    vatRate,
+    amountIncludesVat: false,
+  })
+
+  return {
+    ...tx,
+    ...breakdown,
+    amount: breakdown.netAmount,
+    vatExempt: exempt,
+    vatRate,
+    amountIncludesVat: false,
+  }
+}
+
 /** Compat: calcula IVA sobre base con el tipo por defecto del movimiento. */
 export function vatFromNet(
   net: number,
@@ -95,7 +139,7 @@ export function formatVatPercent(rate: number): string {
 
 function txVatRate(tx: Transaction): number {
   if (tx.vatExempt) return 0
-  if (tx.vatRate != null) return tx.vatRate
+  if (tx.vatRate != null) return normalizeVatRateFraction(tx.vatRate)
   return defaultVatRateFor(tx.type)
 }
 
@@ -112,10 +156,14 @@ function txBreakdown(tx: Transaction): VatBreakdown {
       vatRate: txVatRate(tx),
     }
   }
+  // Por defecto el importe es la base: IVA = importe × tipo
+  const includesVat = tx.amountIncludesVat === true
   return resolveVatAmounts({
-    amount: tx.netAmount ?? tx.amount,
+    amount: includesVat
+      ? (tx.grossAmount ?? tx.amount)
+      : (tx.netAmount ?? tx.amount),
     vatRate: txVatRate(tx),
-    amountIncludesVat: false,
+    amountIncludesVat: includesVat,
   })
 }
 
@@ -218,7 +266,10 @@ export function normalizeVatTransaction<T extends {
   const exempt = Boolean(tx.vatExempt) || tx.vatRate === 0
   const vatRate = exempt
     ? 0
-    : (tx.vatRate ?? defaultVatRateFor(tx.type))
+    : normalizeVatRateFraction(tx.vatRate ?? defaultVatRateFor(tx.type))
+
+  // Por defecto el importe introducido es la base (IVA = importe × tipo)
+  const amountIncludesVat = tx.amountIncludesVat === true
 
   const hasComplete =
     tx.netAmount != null && tx.vatAmount != null && tx.grossAmount != null
@@ -231,9 +282,11 @@ export function normalizeVatTransaction<T extends {
         vatRate,
       }
     : resolveVatAmounts({
-        amount: tx.netAmount ?? tx.amount,
+        amount: amountIncludesVat
+          ? (tx.grossAmount ?? tx.amount)
+          : (tx.netAmount ?? tx.amount),
         vatRate,
-        amountIncludesVat: Boolean(tx.amountIncludesVat),
+        amountIncludesVat,
       })
 
   const deductible =
@@ -247,7 +300,7 @@ export function normalizeVatTransaction<T extends {
     ...breakdown,
     vatExempt: exempt,
     vatRate,
-    amountIncludesVat: Boolean(tx.amountIncludesVat),
+    amountIncludesVat,
     vatDeductible: deductible,
     vatDeductibleShare:
       tx.type === 'gasto'
