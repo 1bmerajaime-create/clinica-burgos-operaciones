@@ -22,3 +22,9 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# local data sync (do not commit)
+public/sync-published.json
+public/sync-import.html
+.sync-inject.js
+.sync-parts/

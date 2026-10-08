@@ -114,124 +114,72 @@ export function Dashboard() {
 
   return (
     <div className="space-y-6 sm:space-y-8">
-      <section className="grid grid-cols-1 gap-3 md:grid-cols-3 md:gap-4">
+      <section className="grid grid-cols-1 gap-4 md:grid-cols-3">
         {cards.map((item, i) => {
           const interactive = Boolean(item.href || item.onOpen)
           const content = (
             <Card
-              className={`h-full min-w-0 !p-4 md:!p-6 ${
+              className={`h-full min-w-0 ${
                 interactive
                   ? 'transition duration-300 group-hover:-translate-y-1 group-hover:shadow-[0_16px_40px_rgba(45,41,38,0.08)]'
                   : ''
               }`}
             >
-              <div className="flex items-center gap-3 text-left md:h-full md:flex-col md:items-stretch md:gap-0">
-                <div className="min-w-0 flex-1 md:flex md:h-full md:flex-col">
-                  <div className="mb-0 flex items-start justify-between gap-2 md:mb-4 md:min-h-8">
-                    <p className="text-[10px] font-medium uppercase tracking-[0.14em] text-ink-muted md:pt-1.5 md:tracking-[0.16em]">
-                      {item.label}
-                    </p>
-                    {interactive ? (
-                      <span className="hidden h-8 w-8 shrink-0 items-center justify-center rounded-full border border-ink/15 text-ink transition group-hover:bg-ink group-hover:text-cream md:flex">
-                        <ArrowUpRight size={14} />
-                      </span>
-                    ) : (
-                      <span
-                        className="hidden h-8 w-8 shrink-0 md:block"
-                        aria-hidden
-                      />
-                    )}
-                  </div>
-
-                  <div className="mt-2 hidden flex-col gap-2 md:flex">
-                    <SignedAmount
-                      value={item.value}
-                      kind={item.resultKind}
-                      size="lg"
-                    />
-                    <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1 text-xs">
-                      <span className="inline-flex items-baseline gap-1.5">
-                        <span className="text-ink-muted">
-                          {item.primaryLabel}
-                        </span>
-                        <SignedAmount
-                          value={item.primaryValue}
-                          kind={item.primaryKind}
-                          forceSign="+"
-                        />
-                      </span>
-                      <span className="inline-flex items-baseline gap-1.5">
-                        <span className="text-ink-muted">
-                          {item.secondaryLabel}
-                        </span>
-                        <SignedAmount
-                          value={item.secondaryValue}
-                          kind={item.secondaryKind}
-                          forceSign="−"
-                        />
-                      </span>
-                      {item.tertiaryLabel != null &&
-                        item.tertiaryValue != null &&
-                        item.tertiaryKind != null && (
-                          <span className="inline-flex items-baseline gap-1.5">
-                            <span className="text-ink-muted">
-                              {item.tertiaryLabel}
-                            </span>
-                            <SignedAmount
-                              value={item.tertiaryValue}
-                              kind={item.tertiaryKind}
-                            />
-                          </span>
-                        )}
-                    </div>
-                  </div>
-
-                  <div className="mt-1.5 flex flex-wrap items-baseline gap-x-3 gap-y-0.5 text-[11px] md:hidden">
-                    <span className="inline-flex items-baseline gap-1">
-                      <span className="text-ink-muted">{item.primaryLabel}</span>
-                      <SignedAmount
-                        value={item.primaryValue}
-                        kind={item.primaryKind}
-                        forceSign="+"
-                      />
+              <div className="flex h-full flex-col text-left">
+                <div className="mb-3 flex min-h-8 items-start justify-between gap-3">
+                  <p className="pt-1.5 text-[10px] font-medium uppercase tracking-[0.16em] text-ink-muted">
+                    {item.label}
+                  </p>
+                  {interactive ? (
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-ink/15 text-ink transition group-hover:bg-ink group-hover:text-cream">
+                      <ArrowUpRight size={14} />
                     </span>
-                    <span className="inline-flex items-baseline gap-1">
-                      <span className="text-ink-muted">
-                        {item.secondaryLabel}
-                      </span>
-                      <SignedAmount
-                        value={item.secondaryValue}
-                        kind={item.secondaryKind}
-                        forceSign="−"
-                      />
-                    </span>
-                    {item.tertiaryLabel != null &&
-                      item.tertiaryValue != null &&
-                      item.tertiaryKind != null && (
-                        <span className="inline-flex items-baseline gap-1">
-                          <span className="text-ink-muted">
-                            {item.tertiaryLabel}
-                          </span>
-                          <SignedAmount
-                            value={item.tertiaryValue}
-                            kind={item.tertiaryKind}
-                          />
-                        </span>
-                      )}
-                  </div>
+                  ) : (
+                    <span className="h-8 w-8 shrink-0" aria-hidden />
+                  )}
                 </div>
 
-                <div className="flex shrink-0 items-center gap-2 md:hidden">
+                <div className="flex flex-col gap-2.5">
                   <SignedAmount
                     value={item.value}
                     kind={item.resultKind}
                     size="lg"
                   />
-                  {interactive && (
-                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-ink/15 text-ink">
-                      <ArrowUpRight size={14} />
-                    </span>
-                  )}
+                  <dl className="space-y-1 text-xs">
+                    <div className="flex items-baseline justify-between gap-3">
+                      <dt className="text-ink-muted">{item.primaryLabel}</dt>
+                      <dd>
+                        <SignedAmount
+                          value={item.primaryValue}
+                          kind={item.primaryKind}
+                          forceSign="+"
+                        />
+                      </dd>
+                    </div>
+                    <div className="flex items-baseline justify-between gap-3">
+                      <dt className="text-ink-muted">{item.secondaryLabel}</dt>
+                      <dd>
+                        <SignedAmount
+                          value={item.secondaryValue}
+                          kind={item.secondaryKind}
+                          forceSign="−"
+                        />
+                      </dd>
+                    </div>
+                    {item.tertiaryLabel != null &&
+                      item.tertiaryValue != null &&
+                      item.tertiaryKind != null && (
+                        <div className="flex items-baseline justify-between gap-3">
+                          <dt className="text-ink-muted">{item.tertiaryLabel}</dt>
+                          <dd>
+                            <SignedAmount
+                              value={item.tertiaryValue}
+                              kind={item.tertiaryKind}
+                            />
+                          </dd>
+                        </div>
+                      )}
+                  </dl>
                 </div>
               </div>
             </Card>
