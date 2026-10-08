@@ -3,6 +3,7 @@ import { Paperclip, Trash2 } from 'lucide-react'
 import { getArea, specialtyLabel } from '../data/areas'
 import { useFinance } from '../context/FinanceContext'
 import { formatCurrencyPrecise, formatDate } from '../lib/format'
+import { formatVatPercent } from '../lib/vat'
 import type { Transaction } from '../types'
 import { Card, SectionTitle } from './ui'
 import { TransactionFormModal } from './TransactionFormModal'
@@ -23,6 +24,10 @@ function AmountBlock({ t }: { t: Transaction }) {
   const base = t.netAmount ?? t.amount
   const exempt = Boolean(t.vatExempt) || t.vatRate === 0
   const negative = t.type === 'gasto' || t.type === 'devolucion'
+  const rateLabel =
+    !exempt && t.vatRate != null && t.vatRate > 0
+      ? ` (${formatVatPercent(t.vatRate)} %)`
+      : ''
 
   return (
     <div
@@ -42,20 +47,28 @@ function AmountBlock({ t }: { t: Transaction }) {
         </span>
       </span>
       <div className="flex flex-col gap-0.5 text-[11px] font-normal text-ink-muted">
-        <span className="whitespace-nowrap">
-          Base {formatCurrencyPrecise(base)}
-        </span>
         {exempt ? (
-          <span>Exento</span>
+          <>
+            <span className="whitespace-nowrap">
+              Base {formatCurrencyPrecise(base)}
+            </span>
+            <span>Exento</span>
+          </>
         ) : (
-          <span className="whitespace-nowrap">
-            IVA {formatCurrencyPrecise(t.vatAmount ?? 0)}
-            {t.type === 'gasto' &&
-              t.vatAmount != null &&
-              t.vatAmount > 0 &&
-              t.vatDeductible === false &&
-              ' · No deducible'}
-          </span>
+          <>
+            <span className="whitespace-nowrap">
+              IVA {formatCurrencyPrecise(t.vatAmount ?? 0)}
+              {rateLabel}
+              {t.type === 'gasto' &&
+                t.vatAmount != null &&
+                t.vatAmount > 0 &&
+                t.vatDeductible === false &&
+                ' · No deducible'}
+            </span>
+            <span className="whitespace-nowrap">
+              Base {formatCurrencyPrecise(base)}
+            </span>
+          </>
         )}
       </div>
     </div>
