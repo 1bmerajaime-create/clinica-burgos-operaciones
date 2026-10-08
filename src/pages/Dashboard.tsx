@@ -31,10 +31,20 @@ export function Dashboard() {
   const groupStats = useMemo(() => areaBreakdown(filtered), [filtered])
   const recent = useMemo(() => recentTransactions(filtered, 8), [filtered])
   const vat = useMemo(() => estimateVatPosition(filtered), [filtered])
+  const vatByArea = useMemo(() => {
+    const map = {} as Record<AreaId, ReturnType<typeof estimateVatPosition>>
+    for (const areaId of DASHBOARD_AREAS) {
+      map[areaId] = estimateVatPosition(
+        filtered.filter((t) => t.areaId === areaId),
+      )
+    }
+    return map
+  }, [filtered])
 
   const areaCards = DASHBOARD_AREAS.map((areaId) => {
     const area = getArea(areaId)!
     const stats = groupStats.find((g) => g.areaId === areaId)!
+    const areaVat = vatByArea[areaId]
     return {
       id: areaId,
       label: area.name,
@@ -45,6 +55,9 @@ export function Dashboard() {
       secondaryLabel: 'Gasto',
       secondaryValue: stats.gastos,
       secondaryKind: 'expense' as const,
+      tertiaryLabel: 'IVA',
+      tertiaryValue: areaVat.resultado,
+      tertiaryKind: 'result' as 'result' | undefined,
       href: `/rama/${areaId}` as string | undefined,
       onOpen: undefined as (() => void) | undefined,
       resultKind: 'result' as const,
@@ -61,6 +74,9 @@ export function Dashboard() {
     secondaryLabel: 'Deducible',
     secondaryValue: vat.soportadoDeducible,
     secondaryKind: 'expense' as const,
+    tertiaryLabel: undefined as string | undefined,
+    tertiaryValue: undefined as number | undefined,
+    tertiaryKind: undefined as 'result' | undefined,
     href: undefined as string | undefined,
     onOpen: () => setVatOpen(true),
     resultKind: 'result' as const,
@@ -154,6 +170,19 @@ export function Dashboard() {
                           forceSign="−"
                         />
                       </span>
+                      {item.tertiaryLabel != null &&
+                        item.tertiaryValue != null &&
+                        item.tertiaryKind != null && (
+                          <span className="inline-flex items-baseline gap-1.5">
+                            <span className="text-ink-muted">
+                              {item.tertiaryLabel}
+                            </span>
+                            <SignedAmount
+                              value={item.tertiaryValue}
+                              kind={item.tertiaryKind}
+                            />
+                          </span>
+                        )}
                     </div>
                   </div>
 
@@ -176,6 +205,19 @@ export function Dashboard() {
                         forceSign="−"
                       />
                     </span>
+                    {item.tertiaryLabel != null &&
+                      item.tertiaryValue != null &&
+                      item.tertiaryKind != null && (
+                        <span className="inline-flex items-baseline gap-1">
+                          <span className="text-ink-muted">
+                            {item.tertiaryLabel}
+                          </span>
+                          <SignedAmount
+                            value={item.tertiaryValue}
+                            kind={item.tertiaryKind}
+                          />
+                        </span>
+                      )}
                   </div>
                 </div>
 
