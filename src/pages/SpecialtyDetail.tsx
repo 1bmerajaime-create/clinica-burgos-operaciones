@@ -17,7 +17,7 @@ import {
   sumByType,
   sumNetIngresos,
 } from '../lib/analytics'
-import { sumAmountBreakdown } from '../lib/vat'
+import { estimateVatPosition, sumAmountBreakdown } from '../lib/vat'
 import type { AreaId, SpecialtyId, TransactionType } from '../types'
 
 function StatCardShell({
@@ -105,6 +105,10 @@ export function SpecialtyDetail() {
   const ingresos = sumNetIngresos(specialtyTransactions, id, specId)
   const gastos = sumByType(specialtyTransactions, 'gasto', id, specId)
   const resultado = ingresos - gastos
+  const specialtyVat = useMemo(
+    () => estimateVatPosition(specialtyTransactions),
+    [specialtyTransactions],
+  )
 
   const incomeBreakdown = useMemo(
     () => sumAmountBreakdown(specialtyTransactions, 'ingreso'),
@@ -156,7 +160,15 @@ export function SpecialtyDetail() {
       <section className="grid gap-4 sm:grid-cols-3">
         <StatCardShell
           label="Resultado"
-          amount={<SignedAmount value={resultado} size="lg" />}
+          amount={
+            <div className="flex flex-col gap-2">
+              <SignedAmount value={resultado} size="lg" />
+              <div className="flex flex-wrap items-baseline gap-x-1.5 text-xs">
+                <span className="text-ink-muted">IVA</span>
+                <SignedAmount value={specialtyVat.resultado} kind="result" />
+              </div>
+            </div>
+          }
         />
         <StatCardShell
           label="Ingresos"
